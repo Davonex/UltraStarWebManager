@@ -1,0 +1,20 @@
+#TITLE:Ma Chanson Test
+#ARTIST:Artiste Démo
+#MP3:audio.mp3
+#COVER:cover.jpg
+#BACKGROUND:background.jpg
+#YEAR:1987
+#GENRE:Pop
+#LANGUAGE:French
+#EDITION:Test
+#BPM:300,5
+#GAP:12500
+#PREVIEWSTART:45,25
+: 0 4 60 Bon
+: 4 4 62 jour
+- 10
+* 12 6 64 tout
+F 18 4 0 le
+R 22 4 65 monde
+E
+Ceci est ignoré après la fin

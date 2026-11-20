@@ -1,0 +1,13 @@
+node_modules/
+.env
+*.log
+cache/
+.DS_Store
+Thumbs.db
+
+# Claude Code (réglages personnels)
+.claude/settings.local.json
+
+# Bibliothèque d'exemple locale (fichiers audio/vidéo soumis au droit d'auteur)
+samplesongs/
+sampleplaylists/

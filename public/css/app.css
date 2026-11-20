@@ -1,0 +1,349 @@
+/* Styles propres à l'application — Bootstrap fait le reste. */
+.song-cover {
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  background-color: var(--bs-secondary-bg);
+}
+
+.song-card {
+  transition: transform 0.1s ease-in-out;
+}
+
+.song-card:hover {
+  transform: translateY(-2px);
+}
+
+/* Évite que la grille ne « saute » quand la barre de navigation est collée en haut. */
+#song-grid-sentinel {
+  height: 1px;
+}
+
+/*
+ * Bouton rond de lecture (pochettes et barre de lecture) :
+ * gris translucide cerclé de blanc, bleu au survol. Icônes SVG (pas d'emoji : Windows
+ * les affiche en couleur). data-state="play | pause | loading" choisit l'icône.
+ */
+.play-button {
+  --play-size: 4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--play-size);
+  height: var(--play-size);
+  padding: 0;
+  color: #fff;
+  background-color: rgb(33 37 41 / 55%);
+  border: 3px solid rgb(255 255 255 / 90%);
+  border-radius: 50%;
+  box-shadow: 0 0.25rem 0.75rem rgb(0 0 0 / 35%);
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease-in-out,
+    transform 0.15s ease-in-out,
+    opacity 0.15s ease-in-out;
+}
+
+.play-button:hover,
+.play-button:focus-visible {
+  background-color: var(--bs-primary);
+  border-color: #fff;
+  outline: none;
+}
+
+.play-button .icon {
+  width: 55%;
+  height: 55%;
+  fill: currentColor;
+}
+
+.play-button .icon-play {
+  margin-left: 8%; /* centre optique du triangle */
+}
+
+.play-button .icon-loading {
+  width: 45%;
+  height: 45%;
+  border-width: 0.2em;
+}
+
+.play-button[data-state="play"] :is(.icon-pause, .icon-loading),
+.play-button[data-state="pause"] :is(.icon-play, .icon-loading),
+.play-button[data-state="loading"] :is(.icon-play, .icon-pause) {
+  display: none;
+}
+
+/* Sur la pochette : centré, visible au survol, au clavier ou pendant la lecture. */
+.song-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+}
+
+.song-play:hover,
+.song-play:focus-visible {
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+.song-card:hover .song-play,
+.song-play:focus-visible,
+.song-card.is-playing .song-play {
+  opacity: 1;
+}
+
+.song-play:disabled {
+  display: none;
+}
+
+.song-card.is-playing {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+}
+
+.player-cover {
+  object-fit: cover;
+}
+
+.player-button {
+  --play-size: 2.5rem;
+  border-width: 2px;
+  box-shadow: none;
+}
+
+.player-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.player-volume {
+  width: 8rem;
+}
+
+.progress {
+  height: 0.35rem;
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+
+main {
+  padding-bottom: 1rem;
+}
+
+/* Laisse la place à la barre de lecture en bas de page. */
+body:has(#player-bar:not([hidden])) main {
+  padding-bottom: 6rem;
+}
+
+/* --- Filtres : pastilles et fenêtre de choix ------------------------------------------ */
+
+.facet-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--bs-body-color);
+  background-color: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 50rem;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease-in-out,
+    border-color 0.15s ease-in-out;
+}
+
+.facet-chip[data-facet]::after {
+  content: "▾";
+  font-size: 0.75em;
+  opacity: 0.7;
+}
+
+.facet-chip:hover,
+.facet-chip:focus-visible {
+  border-color: var(--bs-primary);
+  outline: none;
+}
+
+.facet-chip.active {
+  color: #fff;
+  background-color: var(--bs-primary);
+  border-color: var(--bs-primary);
+}
+
+.facet-chip-count {
+  color: var(--bs-primary);
+  background-color: #fff;
+}
+
+.facet-chip-reset {
+  background-color: transparent;
+}
+
+.facet-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  height: 100%;
+  min-height: 4.5rem;
+  padding: 0.6rem 0.5rem;
+  text-align: center;
+  color: var(--bs-body-color);
+  background-color: var(--bs-secondary-bg);
+  border: 2px solid transparent;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease-in-out,
+    border-color 0.15s ease-in-out;
+}
+
+.facet-option:hover,
+.facet-option:focus-visible {
+  border-color: var(--bs-primary);
+  outline: none;
+}
+
+.facet-option[aria-pressed="true"] {
+  color: #fff;
+  background-color: var(--bs-primary);
+  border-color: var(--bs-primary);
+}
+
+.facet-option.is-empty {
+  opacity: 0.45;
+}
+
+.facet-option-label {
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.facet-option-count {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.navbar-brand {
+  min-width: 0;
+  font-size: clamp(1rem, 4.5vw, 1.25rem);
+}
+
+/* Vignette des tuiles (images des catégories d'UltraStar Deluxe ou initiales). */
+.facet-option-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  margin-bottom: 0.35rem;
+  object-fit: cover;
+  border-radius: 0.5rem;
+}
+
+.facet-option-placeholder {
+  font-size: clamp(1.25rem, 6vw, 2rem);
+  font-weight: 700;
+  color: var(--bs-secondary-color);
+  background-color: var(--bs-tertiary-bg);
+}
+
+.facet-option[aria-pressed="true"] .facet-option-placeholder {
+  color: var(--bs-primary);
+  background-color: #fff;
+}
+
+/* --- Carte chanson : artiste et titre en surimpression, badges en haut à gauche ------ */
+
+.song-caption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 1.25rem 0.5rem 0.4rem;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
+  background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 55%) 35%, rgb(0 0 0 / 80%));
+  pointer-events: none; /* le clic traverse vers la carte */
+}
+
+.song-artist {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.song-title {
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.25;
+  opacity: 0.9;
+}
+
+.song-badges {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.song-badges:empty {
+  display: none;
+}
+
+.song-badges .badge {
+  box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+}
+
+/* Barre de lecture : chanson entière, zone de l'extrait en clair, position en bleu. */
+#player-bar .progress {
+  position: relative;
+  transition: height 0.1s ease-in-out;
+}
+
+/* Zone de clic plus haute que le trait, pratique au doigt. */
+.progress-track {
+  padding: 0.45rem 0;
+  touch-action: none;
+}
+
+.progress-track.is-seekable {
+  cursor: pointer;
+}
+
+#player-bar .progress-track:focus-visible .progress {
+  height: 0.6rem;
+}
+
+#player-bar .progress-track.is-seekable:hover .progress {
+  height: 0.6rem;
+}
+
+.progress-track:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+#player-bar .progress-preview {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background-color: rgba(var(--bs-primary-rgb), 0.35);
+}
+
+#player-bar .progress-bar {
+  position: relative; /* au-dessus de la zone de l'extrait */
+  transition: none;
+}

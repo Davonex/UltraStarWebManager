@@ -1,0 +1,86 @@
+{
+  "app": {
+    "title": "UltraStarWebManager"
+  },
+  "nav": {
+    "language": "Langue"
+  },
+  "status": {
+    "connecting": "Connexion…",
+    "ok": "Serveur OK",
+    "okVersion": "Serveur OK · v{version}",
+    "unreachable": "Serveur injoignable"
+  },
+  "filters": {
+    "search": "Rechercher artiste ou titre…",
+    "decade": "Décennie",
+    "decadeLabel": "Années {decade}",
+    "genre": "Genre",
+    "language": "Langue",
+    "sort": "Trier par",
+    "sortArtist": "Tri : artiste",
+    "sortTitle": "Tri : titre",
+    "sortYearDesc": "Tri : année récente",
+    "sortYearAsc": "Tri : année ancienne",
+    "sortRecent": "Tri : modifiées récemment",
+    "duetOnly": "Duos",
+    "reset": "Réinitialiser",
+    "searchIn": "Rechercher dans {facet}…",
+    "clearFacet": "Effacer",
+    "showResults": {
+      "one": "Voir {count} chanson",
+      "other": "Voir {count} chansons"
+    },
+    "noOptions": "Aucune valeur correspondante.",
+    "edition": "Édition",
+    "tag": "Tags"
+  },
+  "songs": {
+    "shown": {
+      "one": "{count} chanson sur {total}",
+      "other": "{count} chansons sur {total}"
+    },
+    "noResults": "Aucune chanson ne correspond à ces filtres.",
+    "unknownTitle": "Titre inconnu",
+    "unknownArtist": "Artiste inconnu",
+    "coverAlt": "Pochette de {title} par {artist}",
+    "duet": "Duo"
+  },
+  "errors": {
+    "ROUTE_NOT_FOUND": "Route API inconnue",
+    "INTERNAL_ERROR": "Erreur interne du serveur",
+    "NETWORK_ERROR": "Erreur réseau",
+    "SONG_DIR_NOT_CONFIGURED": "Dossier des chansons non configuré (SONG_DIR dans .env)",
+    "CATALOG_UNAVAILABLE": "Impossible de charger le catalogue",
+    "CATALOG_LOADING": "Chargement du catalogue…",
+    "SONG_NOT_FOUND": "Chanson introuvable",
+    "COVER_NOT_FOUND": "Pochette introuvable",
+    "AUDIO_NOT_FOUND": "Fichier audio introuvable"
+  },
+  "warnings": {
+    "MISSING_HEADER": "En-tête #{header} manquant ou invalide",
+    "DUPLICATE_HEADER": "En-tête #{header} en double",
+    "MALFORMED_HEADER": "Ligne {line} : en-tête mal formé",
+    "UNKNOWN_LINE": "Ligne {line} : ligne non reconnue",
+    "NO_NOTES": "Aucune note trouvée",
+    "MISSING_END": "Ligne de fin « E » manquante",
+    "MISSING_FILE": "Fichier introuvable ({kind}) : {file}"
+  },
+  "player": {
+    "playSong": "Écouter un extrait de {title}",
+    "pauseSong": "Mettre en pause {title}",
+    "resume": "Reprendre",
+    "pause": "Pause",
+    "stop": "Arrêter",
+    "volume": "Volume",
+    "progress": "Position dans la chanson",
+    "loading": "Chargement…",
+    "error": "Impossible de lire ce fichier audio",
+    "remaining": "{seconds} s restantes",
+    "noAudio": "Pas de fichier audio",
+    "position": "{current} / {total}"
+  },
+  "common": {
+    "close": "Fermer"
+  }
+}

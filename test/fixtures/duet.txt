@@ -1,0 +1,14 @@
+#TITLE:Duo Test
+#ARTIST:Chanteur A & Chanteur B
+#VERSION:1.1.0
+#AUDIO:duo.mp3
+#MP3:ancien.mp3
+#BPM:250
+#GAP:1000
+P1
+: 0 4 60 Je
+: 4 4 60 chante
+P2
+: 10 4 62 Moi
+: 14 4 62 aussi
+E

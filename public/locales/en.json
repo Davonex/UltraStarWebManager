@@ -1,0 +1,86 @@
+{
+  "app": {
+    "title": "UltraStarWebManager"
+  },
+  "nav": {
+    "language": "Language"
+  },
+  "status": {
+    "connecting": "Connecting…",
+    "ok": "Server OK",
+    "okVersion": "Server OK · v{version}",
+    "unreachable": "Server unreachable"
+  },
+  "filters": {
+    "search": "Search artist or title…",
+    "decade": "Decade",
+    "decadeLabel": "{decade}s",
+    "genre": "Genre",
+    "language": "Language",
+    "sort": "Sort by",
+    "sortArtist": "Sort: artist",
+    "sortTitle": "Sort: title",
+    "sortYearDesc": "Sort: newest year",
+    "sortYearAsc": "Sort: oldest year",
+    "sortRecent": "Sort: recently modified",
+    "duetOnly": "Duets",
+    "reset": "Reset",
+    "searchIn": "Search in {facet}…",
+    "clearFacet": "Clear",
+    "showResults": {
+      "one": "Show {count} song",
+      "other": "Show {count} songs"
+    },
+    "noOptions": "No matching value.",
+    "edition": "Edition",
+    "tag": "Tags"
+  },
+  "songs": {
+    "shown": {
+      "one": "{count} of {total} songs",
+      "other": "{count} of {total} songs"
+    },
+    "noResults": "No song matches these filters.",
+    "unknownTitle": "Unknown title",
+    "unknownArtist": "Unknown artist",
+    "coverAlt": "Cover of {title} by {artist}",
+    "duet": "Duet"
+  },
+  "errors": {
+    "ROUTE_NOT_FOUND": "Unknown API route",
+    "INTERNAL_ERROR": "Internal server error",
+    "NETWORK_ERROR": "Network error",
+    "SONG_DIR_NOT_CONFIGURED": "Song folder not configured (SONG_DIR in .env)",
+    "CATALOG_UNAVAILABLE": "Song catalog could not be loaded",
+    "CATALOG_LOADING": "Song catalog is loading…",
+    "SONG_NOT_FOUND": "Song not found",
+    "COVER_NOT_FOUND": "Cover not found",
+    "AUDIO_NOT_FOUND": "Audio file not found"
+  },
+  "warnings": {
+    "MISSING_HEADER": "Missing or invalid #{header} header",
+    "DUPLICATE_HEADER": "Duplicate #{header} header",
+    "MALFORMED_HEADER": "Line {line}: malformed header",
+    "UNKNOWN_LINE": "Line {line}: unrecognized line",
+    "NO_NOTES": "No notes found",
+    "MISSING_END": "Missing end line \"E\"",
+    "MISSING_FILE": "File not found ({kind}): {file}"
+  },
+  "player": {
+    "playSong": "Play preview of {title}",
+    "pauseSong": "Pause preview of {title}",
+    "resume": "Resume",
+    "pause": "Pause",
+    "stop": "Stop",
+    "volume": "Volume",
+    "progress": "Position in the song",
+    "loading": "Loading…",
+    "error": "Cannot play this audio file",
+    "remaining": "{seconds} s left",
+    "noAudio": "No audio file",
+    "position": "{current} / {total}"
+  },
+  "common": {
+    "close": "Close"
+  }
+}
