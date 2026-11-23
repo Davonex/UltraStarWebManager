@@ -5,6 +5,7 @@
  * @module config
  */
 
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,6 +13,11 @@ import { fileURLToPath } from 'node:url';
 
 /** Racine du projet (pour les chemins par défaut). */
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/** Version de l'application (package.json), affichée et envoyée à MusicBrainz. */
+export const APP_VERSION = /** @type {string} */ (
+  JSON.parse(readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8')).version
+);
 
 /** Longueur minimale d'une clé d'accès. */
 export const MIN_KEY_LENGTH = 12;

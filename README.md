@@ -172,6 +172,13 @@ formats) and, under the warning, a **Convert video to MP4 H.264** button:
    original is removed from the song folder; an MP4 in another codec is replaced under the same
    name. If anything fails, the song folder is left as it was.
 
+**Music and video in the same file** — Some songs use the same MP4 for `#MP3` (or `#AUDIO`) and
+`#VIDEO`: they get a warning, and are never converted (the conversion drops the soundtrack). Under
+that warning, **Create the MP3 file** extracts the soundtrack into `<video name>.mp3` (ffmpeg,
+LAME VBR quality 2) and points `#AUDIO` and/or `#MP3` to it, whichever the file uses; the video is
+not touched and can then be converted normally. When another version of the song in the same folder
+(e.g. `[DUET]`) already created that MP3, it is simply reused.
+
 **Bulk corrections** (write access) — The toolbox button in the top bar opens the bulk
 corrections window. Each tool works in three steps:
 
@@ -252,6 +259,7 @@ All responses are JSON: `{ data: … }` on success, `{ error: { code, message } 
 | POST   | `/api/songs/:id/convert-utf8`             | write  | `{ expectedModifiedAt, dryRun? }` → `{ data: { changed, from, song, backup } }`                                                      |
 | POST   | `/api/songs/:id/convert-video`            | write  | `{ expectedModifiedAt, dryRun? }` → `200 { data: { plan } }` (simulation) or `202 { data: { plan, job } }`                           |
 | GET    | `/api/songs/:id/convert-video`            | write  | Progress of the last conversion: `{ data: { job } }` (`state`: running, done, error)                                                 |
+| POST   | `/api/songs/:id/extract-audio`            | write  | Create the MP3 of a video used as music: `{ expectedModifiedAt, dryRun? }` → `{ data: { plan, song, headers, backup } }`             |
 | POST   | `/api/bulk/convert-video`                 | write  | `{ dryRun: true }` → `{ data: { available, items } }`; `{ items: [{ id, expectedModifiedAt }] }` (≤ 200) → `202 { data: { batch } }` |
 | GET    | `/api/bulk/convert-video`                 | write  | Current or last batch: `{ data: { batch } }` (`state`: running, done, stopped)                                                       |
 | POST   | `/api/bulk/convert-video/stop`            | write  | Stop the batch after the current video                                                                                               |

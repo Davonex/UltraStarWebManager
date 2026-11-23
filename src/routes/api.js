@@ -74,6 +74,7 @@ export function createApiRouter({
   router.post('/playlists/:file/songs', write, playlistsCtl.addSong);
   router.delete('/playlists/:file/songs', write, playlistsCtl.removeSong);
   router.get('/songs/:id/convert-video', write, video.getJob);
+  router.post('/songs/:id/extract-audio', write, video.extractAudio);
   // MusicBrainz (YEAR, GENRE, LANGUAGE) : recherche, puis valeurs proposées ; écriture par PATCH /headers
   router.get('/songs/:id/musicbrainz', write, mb.search);
   router.get('/songs/:id/musicbrainz/:recordingId', write, mb.suggest);

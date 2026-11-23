@@ -182,6 +182,37 @@ export function createSongEditor({ catalog, backupDir, logger = console }) {
     },
 
     /**
+     * Remplace le fichier audio référencé, après l'extraction du MP3 d'une vidéo.
+     * Met à jour #AUDIO et/ou #MP3, selon ceux présents dans le fichier (format 1.1.0 :
+     * #AUDIO ; anciens fichiers : #MP3). Usage interne, comme setVideoFile.
+     *
+     * @param {string} id
+     * @param {{ audio: string, expectedModifiedAt: number }} request
+     * @returns {Promise<{ song: import('./catalogService.js').Song, backup: string | null,
+     *   headers: string[] }>}
+     * @throws {SongEditError}
+     */
+    async setAudioFile(id, { audio, expectedModifiedAt }) {
+      const { song, file, buffer } = await loadForWrite(id, expectedModifiedAt);
+      const { text, encoding } = decodeSongBuffer(buffer);
+      const present = ['AUDIO', 'MP3'].filter((header) =>
+        new RegExp(`^#${header}:`, 'im').test(text),
+      );
+      const headers = present.length > 0 ? present : ['MP3'];
+      /** @type {Record<string, string>} */
+      const values = Object.fromEntries(headers.map((header) => [header, audio]));
+      const { text: updated, changes } = updateHeaders(text, values);
+      if (changes.length === 0) return { song, backup: null, headers };
+      const result = await commit(
+        song,
+        file,
+        encodeSongText(updated, encoding),
+        `${headers.join(', ')} → ${audio}`,
+      );
+      return { ...result, headers };
+    },
+
+    /**
      * Modifie des en-têtes d'une chanson.
      *
      * @param {string} id

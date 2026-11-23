@@ -13,6 +13,7 @@ import {
   convertSongToUtf8,
   convertSongVideo,
   coverUrl,
+  extractSongAudio,
   getSongDetails,
   getVideoJob,
   updateSongHeaders,
@@ -189,6 +190,9 @@ export function createSongDetailsView(
   let videoJob = null;
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let videoTimer;
+  /** Création du MP3 proposée (confirmation affichée), ou null. */
+  /** @type {{ from: string, to: string, reuse: boolean } | null} */
+  let audioPlan = null;
 
   /**
    * Fenêtre MusicBrainz (YEAR / GENRE / LANGUAGE) : la fenêtre info se ferme le temps du
@@ -398,6 +402,108 @@ export function createSongDetailsView(
     action.append(icon('search', 'bi me-1'), t('musicbrainz.title'));
     action.addEventListener('click', openMusicBrainz);
     return action;
+  }
+
+  // --- Création du MP3 (vidéo qui sert aussi de musique) -----------------------------
+
+  /** Bloc sous l'avertissement VIDEO_IS_AUDIO : bouton, puis confirmation. */
+  function audioBlock() {
+    const wrap = el('div', 'mt-1 mb-2');
+    if (!details?.video?.canExtractAudio) {
+      wrap.append(el('small', 'd-block text-body-secondary', t('video.unavailable')));
+      return wrap;
+    }
+    if (audioPlan) {
+      wrap.append(
+        el(
+          'small',
+          'd-block mb-1',
+          t(audioPlan.reuse ? 'audio.planReuse' : 'audio.plan', {
+            from: audioPlan.from,
+            to: audioPlan.to,
+          }),
+        ),
+      );
+      const start = /** @type {HTMLButtonElement} */ (el('button', 'btn btn-sm btn-warning me-2'));
+      start.type = 'button';
+      start.disabled = busy;
+      start.append(
+        busy ? el('span', 'spinner-border spinner-border-sm me-1') : icon('check2', 'bi me-1'),
+        t('audio.start'),
+      );
+      start.addEventListener('click', extractAudio);
+      const cancel = /** @type {HTMLButtonElement} */ (
+        el('button', 'btn btn-sm btn-outline-secondary')
+      );
+      cancel.type = 'button';
+      cancel.disabled = busy;
+      cancel.textContent = t('video.cancel');
+      cancel.addEventListener('click', () => {
+        audioPlan = null;
+        renderBody();
+      });
+      wrap.append(start, cancel);
+      return wrap;
+    }
+    const action = /** @type {HTMLButtonElement} */ (
+      el('button', 'btn btn-sm btn-outline-warning')
+    );
+    action.type = 'button';
+    action.disabled = busy || videoJob?.state === 'running';
+    action.append(icon('file-earmark-music', 'bi me-1'), t('audio.create'));
+    action.addEventListener('click', proposeAudioExtraction);
+    wrap.append(action, el('small', 'd-block text-body-secondary mt-1', t('audio.hint')));
+    return wrap;
+  }
+
+  /** 1. Simulation : nom du MP3 qui sera créé. */
+  async function proposeAudioExtraction() {
+    if (!current || busy) return;
+    busy = true;
+    renderBody();
+    try {
+      const { data } = await extractSongAudio(current.id, {
+        expectedModifiedAt: current.modifiedAt,
+        dryRun: true,
+      });
+      audioPlan = data.plan;
+      message = null;
+    } catch (error) {
+      message = { kind: 'danger', text: errorText(error) };
+    } finally {
+      busy = false;
+    }
+    renderBody();
+  }
+
+  /** 2. Création du MP3 et mise à jour de #AUDIO / #MP3. */
+  async function extractAudio() {
+    if (!current || busy || !audioPlan) return;
+    busy = true;
+    renderBody();
+    try {
+      const { data } = await extractSongAudio(current.id, {
+        expectedModifiedAt: current.modifiedAt,
+      });
+      current = data.song;
+      onSongUpdated(data.song);
+      message = {
+        kind: 'success',
+        text: t(data.plan.reuse ? 'audio.doneReuse' : 'audio.done', {
+          file: data.plan.to,
+          headers: data.headers.map((h) => `#${h}`).join(', '),
+          backup: data.backup ?? '—',
+        }),
+      };
+      audioPlan = null;
+      details = (await getSongDetails(data.song.id)).data.details;
+    } catch (error) {
+      message = { kind: 'danger', text: errorText(error) };
+    } finally {
+      busy = false;
+    }
+    renderHeader();
+    renderBody();
   }
 
   // --- Conversion vidéo ----------------------------------------------------------------
@@ -886,6 +992,7 @@ export function createSongDetailsView(
         const item = el('li', '', text === key ? warning.message : text);
         if (ENCODING_WARNINGS.has(warning.code) && canEdit()) item.append(convertButton());
         if (warning === videoWarning && canEdit()) item.append(videoBlock());
+        if (warning.code === 'VIDEO_IS_AUDIO' && canEdit()) item.append(audioBlock());
         list.append(item);
       }
       block.append(h, list);
@@ -915,6 +1022,9 @@ export function createSongDetailsView(
     const notice = messageBlock();
     // Panneau MusicBrainz juste après « Informations » (les champs qu'il complète).
     body.replaceChildren(...(notice ? [notice] : []), ...sections);
+    // Le bouton cliqué a pu disparaître avec le re-rendu : on garde le focus dans la fenêtre,
+    // sinon Échap ne la fermerait plus.
+    if (modal.classList.contains('show') && !modal.contains(document.activeElement)) modal.focus();
   }
 
   /**
@@ -930,6 +1040,7 @@ export function createSongDetailsView(
     pendingValues = null;
     message = notice;
     videoPlan = null;
+    audioPlan = null;
     renderHeader();
     renderBody();
     bootstrapModal.show();

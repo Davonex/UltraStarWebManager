@@ -88,7 +88,9 @@
     "MUSICBRAINZ_NO_QUERY": "L’artiste et le titre sont nécessaires pour chercher sur MusicBrainz.",
     "PLAYLIST_NOT_FOUND": "Playlist introuvable.",
     "PLAYLIST_CHANGED": "La playlist a été modifiée ailleurs : rouvrez le menu et réessayez.",
-    "PLAYLIST_READ_ONLY": "Les playlists ne peuvent pas être modifiées (pas de dossier de sauvegarde)."
+    "PLAYLIST_READ_ONLY": "Les playlists ne peuvent pas être modifiées (pas de dossier de sauvegarde).",
+    "AUDIO_NOT_SHARED": "La musique est déjà un fichier à part.",
+    "AUDIO_EXTRACTION_FAILED": "Le MP3 n’a pas pu être créé : rien n’a été modifié."
   },
   "warnings": {
     "MISSING_HEADER": "En-tête #{header} manquant ou invalide",
@@ -251,7 +253,7 @@
       "stopping": "Arrêt après la vidéo en cours…",
       "summary": "Lot terminé : {converted} convertie(s), {errors} erreur(s).",
       "stopped": "Lot arrêté : {converted} convertie(s), {errors} erreur(s), {skipped} non traitée(s).",
-      "isAudio": "sert aussi de musique (#MP3) : non convertie"
+      "isAudio": "sert aussi de musique (#MP3) : créez d’abord le MP3 depuis la fenêtre info"
     }
   },
   "video": {
@@ -266,7 +268,7 @@
     "runningUnknown": "Conversion…",
     "done": "Vidéo convertie : {file}. Original sauvegardé : {backup}",
     "unavailable": "ffmpeg introuvable : renseignez FFMPEG_PATH dans .env pour activer la conversion.",
-    "isAudio": "Le fichier vidéo sert aussi de musique (#MP3) : la conversion retirerait la bande son. Non converti : à traiter à la main."
+    "isAudio": "Le fichier vidéo sert aussi de musique : créez d’abord le fichier MP3 (avertissement ci-dessus), la vidéo pourra ensuite être convertie."
   },
   "musicbrainz": {
     "title": "MusicBrainz",
@@ -298,5 +300,14 @@
       "other": "{count} chansons"
     },
     "readOnly": "Connectez-vous en écriture pour ajouter ou retirer cette chanson."
+  },
+  "audio": {
+    "create": "Créer le fichier MP3",
+    "hint": "Extrait la musique de la vidéo dans un fichier MP3 à part (la vidéo n’est pas modifiée) ; la vidéo pourra ensuite être convertie.",
+    "plan": "{to} sera créé à partir de la bande son de {from} ; #AUDIO / #MP3 pointera dessus. La vidéo n’est pas modifiée.",
+    "start": "Créer",
+    "done": "MP3 créé : {file} ({headers} mis à jour). Sauvegarde : {backup}",
+    "planReuse": "{to} existe déjà (créé pour une autre version de cette chanson) : #AUDIO / #MP3 pointera dessus.",
+    "doneReuse": "La musique pointe maintenant sur {file} existant ({headers} mis à jour). Sauvegarde : {backup}"
   }
 }

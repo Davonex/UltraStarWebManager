@@ -205,6 +205,7 @@ export function facetImageUrl(facet, value) {
  * @property {boolean} oversized    Plus grande que 1080p.
  * @property {boolean} isAudio  Sert aussi de fichier audio (#MP3) : jamais convertie.
  * @property {boolean} canConvert   ffmpeg disponible et vidéo à convertir.
+ * @property {boolean} canExtractAudio  ffmpeg disponible et vidéo qui sert aussi de musique.
  */
 
 /**
@@ -293,6 +294,16 @@ export const bulkConvertToUtf8 = (body) => postJson('/bulk/convert-utf8', body);
  */
 export const convertSongVideo = (id, body) =>
   postJson(`/songs/${encodeURIComponent(id)}/convert-video`, body);
+
+/**
+ * Crée le MP3 d'une chanson dont la vidéo sert aussi de musique, et met à jour #AUDIO / #MP3
+ * (niveau écriture). Avec `dryRun`, rien n'est écrit.
+ * @param {string} id
+ * @param {{ expectedModifiedAt: number, dryRun?: boolean }} body
+ * @returns {Promise<{ data: { plan: { from: string, to: string, reuse: boolean }, song: Song, headers: string[], backup: string | null } }>}
+ */
+export const extractSongAudio = (id, body) =>
+  postJson(`/songs/${encodeURIComponent(id)}/extract-audio`, body);
 
 /**
  * État de la dernière conversion vidéo d'une chanson (niveau écriture).

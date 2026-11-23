@@ -41,6 +41,13 @@ async function setup(env) {
     post: (body) =>
       request(baseUrl, url, { method: 'POST', headers: { 'x-usm-request': '1' }, body }),
     getJob: () => request(baseUrl, url),
+    /** @param {unknown} body */
+    extract: (body) =>
+      request(baseUrl, `/api/songs/${song.id}/extract-audio`, {
+        method: 'POST',
+        headers: { 'x-usm-request': '1' },
+        body,
+      }),
     close: async () => {
       await new Promise((resolve) => server.close(resolve));
       await library.cleanup();
@@ -69,6 +76,7 @@ describe('POST/GET /api/songs/:id/convert-video', () => {
           oversized: false,
           isAudio: false,
           canConvert: true,
+          canExtractAudio: false,
         },
       );
       assert.ok(
@@ -106,6 +114,18 @@ describe('POST/GET /api/songs/:id/convert-video', () => {
     }
   });
 
+  it('extraction MP3 : refusée si la musique est déjà un fichier à part (409), corps invalide (400)', async () => {
+    const app = await setup({});
+    try {
+      const res = await app.extract({ expectedModifiedAt: app.song.modifiedAt, dryRun: true });
+      assert.equal(res.status, 409);
+      assert.equal(res.json.error.code, 'AUDIO_NOT_SHARED');
+      assert.equal((await app.extract({ dryRun: true })).status, 400);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('400 si le corps est invalide', async () => {
     const app = await setup({});
     try {
@@ -126,6 +146,7 @@ describe('POST/GET /api/songs/:id/convert-video', () => {
     try {
       assert.equal((await app.post({ expectedModifiedAt: app.song.modifiedAt })).status, 403);
       assert.equal((await app.getJob()).status, 403);
+      assert.equal((await app.extract({ expectedModifiedAt: app.song.modifiedAt })).status, 403);
       assert.deepEqual(await readFile(path.join(app.library.root, 'lib/clip/clip.avi')), AVI);
     } finally {
       await app.close();

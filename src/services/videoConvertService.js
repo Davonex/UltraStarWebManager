@@ -50,7 +50,8 @@ const MTIME_TOLERANCE_MS = 1;
 /**
  * @typedef {import('./videoProbe.js').ProbedVideo & {
  *   duration: number | null, frameRate: number | null,
- *   recommended: boolean, oversized: boolean, isAudio: boolean, canConvert: boolean }} VideoDetails
+ *   recommended: boolean, oversized: boolean, isAudio: boolean, canConvert: boolean,
+ *   canExtractAudio: boolean }} VideoDetails
  *   `recommended` : format MP4 H.264 ; `oversized` : plus grande que 1080p.
  *   `isAudio` : la vidéo sert aussi de fichier audio (jamais convertie, voir videoIsAudio).
  */
@@ -364,6 +365,7 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
         oversized: isOversizedVideo(song.video),
         isAudio: videoIsAudio(song),
         canConvert: available && needsConversion(song.video) && !videoIsAudio(song),
+        canExtractAudio: available && videoIsAudio(song),
       };
     },
 
@@ -375,6 +377,81 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
     getJob(id) {
       const job = jobs.get(id);
       return job ? { ...job } : null;
+    },
+
+    /**
+     * Crée le fichier MP3 d'une chanson dont la vidéo sert aussi de musique (#MP3 = #VIDEO),
+     * puis fait pointer #AUDIO / #MP3 dessus. La vidéo n'est pas modifiée ; elle pourra
+     * ensuite être convertie sans perdre la musique.
+     *
+     * Étapes : ffmpeg écrit un fichier temporaire → contrôle (non vide) → renommage en
+     * `<nom de la vidéo>.mp3` → mise à jour du .txt (sauvegarde datée). En cas d'échec du .txt,
+     * le MP3 créé est retiré.
+     * Si `<nom de la vidéo>.mp3` existe déjà (ex. créé pour la version [DUET] du même dossier),
+     * il est réutilisé : seul le .txt change.
+     *
+     * @param {string} id
+     * @param {{ expectedModifiedAt: number, dryRun?: boolean }} request
+     * @returns {Promise<{ plan: { from: string, to: string, reuse: boolean }, song: import('./catalogService.js').Song,
+     *   headers: string[], backup: string | null }>}
+     * @throws {SongEditError}
+     */
+    async extractAudio(id, { expectedModifiedAt, dryRun = false }) {
+      const song = catalog.getSong(id);
+      if (!song) throw new SongEditError('SONG_NOT_FOUND', 'Song not found', 404);
+      const folder = catalog.resolveSongFolder(song);
+      const sourceName = song.files.video;
+      const source = folder && sourceName ? resolveInside(folder, sourceName) : null;
+      if (!folder || !sourceName || !source || !videoIsAudio(song)) {
+        throw new SongEditError(
+          'AUDIO_NOT_SHARED',
+          'The audio file is not the video file: nothing to extract',
+          409,
+        );
+      }
+      const targetName = `${path.parse(sourceName).name}.mp3`;
+      const target = path.join(folder, targetName);
+      const reuse = await exists(target);
+      await checkUnchanged(song, expectedModifiedAt);
+      const plan = { from: sourceName, to: targetName, reuse };
+      if (dryRun) return { plan, song, headers: [], backup: null };
+      if (reuse) {
+        const result = await editor.setAudioFile(id, { audio: targetName, expectedModifiedAt });
+        logger.info(`Audio of ${song.folder}/${song.txtFile} → existing ${targetName}`);
+        return { plan, ...result };
+      }
+
+      await ensureCanStart();
+      busy = true;
+      const temp = path.join(folder, `.${path.parse(targetName).name}.usm-extracting.mp3`);
+      try {
+        await ffmpeg.extractAudioToMp3({ input: source, output: temp });
+        const { size } = await stat(temp);
+        if (size === 0) {
+          throw new SongEditError('AUDIO_EXTRACTION_FAILED', 'Extracted MP3 is empty', 500);
+        }
+        await rename(temp, target);
+        try {
+          const result = await editor.setAudioFile(id, { audio: targetName, expectedModifiedAt });
+          logger.info(`Audio extracted ${song.folder}/${sourceName} → ${targetName}`);
+          return { plan, ...result };
+        } catch (error) {
+          await rm(target, { force: true }); // le .txt n'a pas changé : on revient en arrière
+          throw error;
+        }
+      } catch (error) {
+        if (error instanceof FfmpegError) {
+          throw new SongEditError(
+            error.code,
+            error.message,
+            error.code === 'FFMPEG_NOT_AVAILABLE' ? 503 : 500,
+          );
+        }
+        throw error;
+      } finally {
+        await rm(temp, { force: true });
+        busy = false;
+      }
     },
 
     /**

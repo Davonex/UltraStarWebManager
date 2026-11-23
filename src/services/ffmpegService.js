@@ -83,6 +83,38 @@ export function buildConvertArgs(input, output) {
   ];
 }
 
+/** Qualité MP3 (VBR LAME : 2 ≈ 190 kb/s, transparent pour du karaoké). */
+export const MP3_QUALITY = 2;
+
+/**
+ * Arguments d'extraction de la piste audio en MP3 (la vidéo n'est pas lue).
+ * @param {string} input
+ * @param {string} output
+ * @returns {string[]}
+ */
+export function buildExtractAudioArgs(input, output) {
+  return [
+    '-hide_banner',
+    '-nostdin',
+    '-y',
+    '-i',
+    input,
+    '-map',
+    '0:a:0',
+    '-vn',
+    '-c:a',
+    'libmp3lame',
+    '-q:a',
+    String(MP3_QUALITY),
+    '-f',
+    'mp3',
+    '-progress',
+    'pipe:1',
+    '-nostats',
+    output,
+  ];
+}
+
 /**
  * Dernière position (s) annoncée dans la sortie « -progress » de ffmpeg (null si aucune).
  * @param {string} text
@@ -128,7 +160,7 @@ export function parseProbeOutput(json) {
 /** Erreur de ffmpeg (programme absent, conversion échouée…). */
 export class FfmpegError extends Error {
   /**
-   * @param {'FFMPEG_NOT_AVAILABLE' | 'VIDEO_CONVERSION_FAILED'} code
+   * @param {'FFMPEG_NOT_AVAILABLE' | 'VIDEO_CONVERSION_FAILED' | 'AUDIO_EXTRACTION_FAILED'} code
    * @param {string} message
    */
   constructor(code, message) {
@@ -147,6 +179,48 @@ export function createFfmpeg({ ffmpegPath, logger = console }) {
   const ffprobePath = ffprobePathFor(ffmpegPath);
   /** @type {Promise<boolean> | null} */
   let available = null;
+
+  /**
+   * Lance ffmpeg en priorité basse et attend la fin.
+   * @param {string[]} args
+   * @param {object} options
+   * @param {string} options.input  Pour le journal.
+   * @param {(seconds: number) => void} [options.onProgress]
+   * @param {'VIDEO_CONVERSION_FAILED' | 'AUDIO_EXTRACTION_FAILED'} options.failure  Code d'erreur.
+   * @returns {Promise<void>}
+   */
+  function run(args, { input, onProgress, failure }) {
+    return new Promise((resolve, reject) => {
+      const child = spawn(ffmpegPath, args, { windowsHide: true });
+      // Priorité basse : le PC reste utilisable pendant une longue série de conversions.
+      try {
+        if (child.pid) os.setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL);
+      } catch {
+        // Sans importance : la conversion se fait simplement en priorité normale.
+      }
+      let stderr = '';
+      child.stdout.setEncoding('utf8').on('data', (/** @type {string} */ chunk) => {
+        const seconds = parseProgress(chunk);
+        if (seconds !== null) onProgress?.(seconds);
+      });
+      child.stderr.setEncoding('utf8').on('data', (/** @type {string} */ chunk) => {
+        stderr = (stderr + chunk).slice(-4000); // garde la fin pour le journal
+      });
+      child.on('error', (error) =>
+        reject(new FfmpegError('FFMPEG_NOT_AVAILABLE', `Cannot run ffmpeg: ${error.message}`)),
+      );
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        logger.warn(
+          `ffmpeg failed (${code}) for ${input}:\n${stderr.trim().split('\n').slice(-5).join('\n')}`,
+        );
+        reject(new FfmpegError(failure, `ffmpeg exited with code ${code}`));
+      });
+    });
+  }
 
   return {
     /**
@@ -195,37 +269,22 @@ export function createFfmpeg({ ffmpegPath, logger = console }) {
      * @param {(seconds: number) => void} [job.onProgress]  Position atteinte (s).
      * @returns {Promise<void>}
      */
-    convertToH264({ input, output, onProgress }) {
-      return new Promise((resolve, reject) => {
-        const child = spawn(ffmpegPath, buildConvertArgs(input, output), { windowsHide: true });
-        // Priorité basse : le PC reste utilisable pendant une longue série de conversions.
-        try {
-          if (child.pid) os.setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL);
-        } catch {
-          // Sans importance : la conversion se fait simplement en priorité normale.
-        }
-        let stderr = '';
-        child.stdout.setEncoding('utf8').on('data', (/** @type {string} */ chunk) => {
-          const seconds = parseProgress(chunk);
-          if (seconds !== null) onProgress?.(seconds);
-        });
-        child.stderr.setEncoding('utf8').on('data', (/** @type {string} */ chunk) => {
-          stderr = (stderr + chunk).slice(-4000); // garde la fin pour le journal
-        });
-        child.on('error', (error) =>
-          reject(new FfmpegError('FFMPEG_NOT_AVAILABLE', `Cannot run ffmpeg: ${error.message}`)),
-        );
-        child.on('close', (code) => {
-          if (code === 0) resolve();
-          else {
-            logger.warn(
-              `ffmpeg failed (${code}) for ${input}:\n${stderr.trim().split('\n').slice(-5).join('\n')}`,
-            );
-            reject(new FfmpegError('VIDEO_CONVERSION_FAILED', `ffmpeg exited with code ${code}`));
-          }
-        });
-      });
-    },
+    convertToH264: ({ input, output, onProgress }) =>
+      run(buildConvertArgs(input, output), {
+        input,
+        onProgress,
+        failure: 'VIDEO_CONVERSION_FAILED',
+      }),
+
+    /**
+     * Extrait la piste audio en MP3 (voir buildExtractAudioArgs).
+     * @param {object} job
+     * @param {string} job.input
+     * @param {string} job.output
+     * @returns {Promise<void>}
+     */
+    extractAudioToMp3: ({ input, output }) =>
+      run(buildExtractAudioArgs(input, output), { input, failure: 'AUDIO_EXTRACTION_FAILED' }),
   };
 }
 

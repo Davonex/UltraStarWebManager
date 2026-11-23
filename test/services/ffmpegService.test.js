@@ -135,6 +135,48 @@ describe('createFfmpeg', () => {
     }
   });
 
+  it('extrait la piste audio d’une vidéo en MP3', { skip: !installed }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'usm-ffmpeg-'));
+    try {
+      const input = path.join(dir, 'clip.mp4');
+      const output = path.join(dir, 'clip.mp3');
+      execFileSync('ffmpeg', [
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc=size=320x240:duration=2',
+        '-f',
+        'lavfi',
+        '-i',
+        'sine=duration=2',
+        '-c:v',
+        'libx264',
+        '-c:a',
+        'aac',
+        '-shortest',
+        input,
+      ]);
+      const ffmpeg = createFfmpeg({ ffmpegPath: 'ffmpeg', logger: silentLogger });
+      await ffmpeg.extractAudioToMp3({ input, output });
+      const probe = execFileSync('ffprobe', [
+        '-v',
+        'error',
+        '-show_entries',
+        'stream=codec_name,codec_type',
+        '-of',
+        'csv=p=0',
+        output,
+      ])
+        .toString()
+        .trim();
+      assert.equal(probe, 'mp3,audio');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('réduit une vidéo plus grande que 1080p en gardant ses proportions', {
     skip: !installed,
   }, async () => {

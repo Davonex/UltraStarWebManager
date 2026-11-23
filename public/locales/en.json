@@ -88,7 +88,9 @@
     "MUSICBRAINZ_NO_QUERY": "The artist and title are needed to search MusicBrainz.",
     "PLAYLIST_NOT_FOUND": "Playlist not found.",
     "PLAYLIST_CHANGED": "The playlist was changed elsewhere: reopen the menu and try again.",
-    "PLAYLIST_READ_ONLY": "Playlists cannot be changed (no backup folder)."
+    "PLAYLIST_READ_ONLY": "Playlists cannot be changed (no backup folder).",
+    "AUDIO_NOT_SHARED": "The music is already a separate file.",
+    "AUDIO_EXTRACTION_FAILED": "The MP3 could not be created: nothing was changed."
   },
   "warnings": {
     "MISSING_HEADER": "Missing or invalid #{header} header",
@@ -251,7 +253,7 @@
       "stopping": "Stopping after the current video…",
       "summary": "Batch finished: {converted} converted, {errors} error(s).",
       "stopped": "Batch stopped: {converted} converted, {errors} error(s), {skipped} not processed.",
-      "isAudio": "also the audio file (#MP3): not converted"
+      "isAudio": "also the music (#MP3): create the MP3 from the details window first"
     }
   },
   "video": {
@@ -266,7 +268,7 @@
     "runningUnknown": "Converting…",
     "done": "Video converted: {file}. Original saved in the backups: {backup}",
     "unavailable": "ffmpeg not found: set FFMPEG_PATH in .env to enable conversion.",
-    "isAudio": "The video file is also the song’s audio (#MP3): converting it would remove the music. Not converted: handle it manually."
+    "isAudio": "The video file is also the song’s music: create the MP3 file first (warning above), then the video can be converted."
   },
   "musicbrainz": {
     "title": "MusicBrainz",
@@ -298,5 +300,14 @@
       "other": "{count} songs"
     },
     "readOnly": "Sign in with write access to add or remove this song."
+  },
+  "audio": {
+    "create": "Create the MP3 file",
+    "hint": "Extracts the music from the video into its own MP3 file (the video is not changed), then the video can be converted.",
+    "plan": "{to} will be created from the soundtrack of {from}; #AUDIO / #MP3 will point to it. The video is not changed.",
+    "start": "Create",
+    "done": "MP3 created: {file} ({headers} updated). Backup: {backup}",
+    "planReuse": "{to} already exists (created for another version of this song): #AUDIO / #MP3 will point to it.",
+    "doneReuse": "Music now points to the existing {file} ({headers} updated). Backup: {backup}"
   }
 }

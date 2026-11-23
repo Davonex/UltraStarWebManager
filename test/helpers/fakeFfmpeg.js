@@ -6,10 +6,13 @@
 import { writeFile } from 'node:fs/promises';
 import { H264_720P, mp4File, track } from './mp4.js';
 
+/** Faux MP3 produit par l'extraction (en-tête ID3 + données). */
+export const FAKE_MP3 = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(4000, 1)]);
+
 /**
  * @param {object} [options]
  * @param {boolean} [options.available]
- * @param {'h264' | 'broken'} [options.output]  broken : produit un fichier non H.264.
+ * @param {'h264' | 'broken'} [options.output]  broken : vidéo non H.264, MP3 vide.
  * @param {Promise<void>} [options.gate]  La conversion attend cette promesse (tâche « longue »).
  * @returns {import('../../src/services/ffmpegService.js').Ffmpeg & { calls: string[] }}
  */
@@ -29,6 +32,11 @@ export function createFakeFfmpeg({ available = true, output = 'h264', gate } = {
           ? H264_720P()
           : mp4File({ tracks: [track({ handler: 'vide', codec: 'mp4v', width: 2, height: 2 })] });
       await writeFile(file, data);
+    },
+    async extractAudioToMp3({ input, output: file }) {
+      calls.push(`audio:${input}`);
+      await gate;
+      await writeFile(file, output === 'broken' ? Buffer.alloc(0) : FAKE_MP3);
     },
   };
 }
