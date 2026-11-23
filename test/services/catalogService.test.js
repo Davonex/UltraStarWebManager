@@ -59,6 +59,7 @@ describe('catalogService', () => {
       video: null,
     });
     assert.deepEqual(zen.warnings, []);
+    assert.equal(zen.videoGap, 0, 'sans #VIDEOGAP : 0');
   });
 
   it('retrouve les fichiers malgré la casse et devine la pochette [CO]', () => {
@@ -76,13 +77,16 @@ describe('catalogService', () => {
     assert.ok(duo);
     assert.equal(duo.isDuet, true);
     assert.equal(duo.files.video, null);
-    assert.deepEqual(duo.warnings, [
-      {
-        code: 'MISSING_FILE',
-        message: 'Referenced video file not found: duo.mp4',
-        params: { kind: 'video', file: 'duo.mp4' },
-      },
-    ]);
+    assert.deepEqual(
+      duo.warnings.filter((w) => w.code !== 'MISSING_HEADER'),
+      [
+        {
+          code: 'MISSING_FILE',
+          message: 'Referenced video file not found: duo.mp4',
+          params: { kind: 'video', file: 'duo.mp4' },
+        },
+      ],
+    );
   });
 
   it('donne des identifiants uniques et stables d’un scan à l’autre', async () => {
@@ -94,6 +98,13 @@ describe('catalogService', () => {
       before,
     );
     assert.equal(catalog.getSong(before[0])?.id, before[0]);
+  });
+
+  it('pendant une relecture, la liste actuelle reste disponible', async () => {
+    const pending = catalog.load();
+    assert.equal(catalog.getStatus().state, 'ready');
+    assert.equal(catalog.getSongs().length, 4);
+    await pending;
   });
 
   it('partage un même scan entre appels simultanés', () => {
@@ -139,5 +150,101 @@ describe('previewOf — début de la preview', () => {
 
   it('sinon null (le lecteur choisit)', () => {
     assert.deepEqual(previewOf(meta('#BPM:300')), { previewStart: null, previewSource: null });
+  });
+});
+
+describe('catalogService — vidéos', () => {
+  it('décrit la vidéo et signale celles qui ne sont pas en MP4 H.264', async () => {
+    const { H264_720P, mp4File, track } = await import('../helpers/mp4.js');
+    const { songTxt } = await import('../helpers/songLibrary.js');
+    const song = (/** @type {string} */ title, /** @type {string} */ video) =>
+      songTxt({ TITLE: title, ARTIST: 'A', MP3: 'a.mp3', BPM: '300', VIDEO: video });
+    const library = await createSongLibrary({
+      'h264/a.txt': song('H264', 'v.mp4'),
+      'h264/v.mp4': H264_720P(),
+      'hevc/a.txt': song('HEVC', 'v.mp4'),
+      'hevc/v.mp4': mp4File({
+        tracks: [track({ handler: 'vide', codec: 'hvc1', width: 1920, height: 1080 })],
+      }),
+      '4k/a.txt': song('4K', 'v.mp4'),
+      '4k/v.mp4': mp4File({
+        tracks: [track({ handler: 'vide', codec: 'avc1', width: 3840, height: 2160 })],
+      }),
+      'avi/a.txt': song('AVI', 'v.avi'),
+      'avi/v.avi': 'RIFF',
+    });
+    try {
+      const catalog = createCatalog({ songDir: library.root, logger: silentLogger });
+      await catalog.load();
+      /** @param {string} title */
+      const get = (title) => catalog.getSongs().find((s) => s.title === title);
+      const codes = (/** @type {string} */ title) => get(title)?.warnings.map((w) => w.code);
+
+      assert.deepEqual(
+        { ...get('H264')?.video, modifiedAt: null },
+        {
+          container: 'mp4',
+          codec: 'h264',
+          width: 1280,
+          height: 720,
+          modifiedAt: null,
+        },
+      );
+      assert.ok(!codes('H264')?.includes('VIDEO_NOT_H264'));
+
+      assert.deepEqual(get('HEVC')?.warnings.find((w) => w.code === 'VIDEO_NOT_H264')?.params, {
+        format: 'MP4 HEVC',
+      });
+      assert.equal(get('AVI')?.video?.container, 'avi');
+      // 4K en H.264 : bon format, mais trop grande
+      assert.ok(!codes('4K')?.includes('VIDEO_NOT_H264'));
+      assert.deepEqual(get('4K')?.warnings.find((w) => w.code === 'VIDEO_TOO_LARGE')?.params, {
+        width: 3840,
+        height: 2160,
+      });
+      assert.ok(!codes('H264')?.includes('VIDEO_TOO_LARGE'));
+      assert.ok(codes('AVI')?.includes('VIDEO_NOT_H264'));
+    } finally {
+      await library.cleanup();
+    }
+  });
+});
+
+describe('catalogService — vidéo qui sert aussi de musique', () => {
+  it('avertissement VIDEO_IS_AUDIO quand #MP3 et #VIDEO désignent le même fichier (casse ignorée)', async () => {
+    const { songTxt } = await import('../helpers/songLibrary.js');
+    const library = await createSongLibrary({
+      'meme/a.txt': songTxt({
+        TITLE: 'Même',
+        ARTIST: 'A',
+        MP3: 'clip.mp4',
+        VIDEO: 'CLIP.mp4',
+        BPM: '300',
+      }),
+      'meme/clip.mp4': '',
+      'separe/a.txt': songTxt({
+        TITLE: 'Séparé',
+        ARTIST: 'A',
+        MP3: 'a.mp3',
+        VIDEO: 'clip.mp4',
+        BPM: '300',
+      }),
+      'separe/a.mp3': '',
+      'separe/clip.mp4': '',
+    });
+    try {
+      const catalog = createCatalog({ songDir: library.root, logger: silentLogger });
+      await catalog.load();
+      /** @param {string} title */
+      const warning = (title) =>
+        catalog
+          .getSongs()
+          .find((s) => s.title === title)
+          ?.warnings.find((w) => w.code === 'VIDEO_IS_AUDIO');
+      assert.deepEqual(warning('Même')?.params, { file: 'clip.mp4' });
+      assert.equal(warning('Séparé'), undefined);
+    } finally {
+      await library.cleanup();
+    }
   });
 });

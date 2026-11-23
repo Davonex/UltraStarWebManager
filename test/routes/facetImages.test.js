@@ -42,6 +42,7 @@ describe('GET /api/facet-images', () => {
       language: ['French'],
       decade: ['1990'],
       edition: [],
+      tag: [],
     });
   });
 

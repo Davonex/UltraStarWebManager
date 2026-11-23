@@ -126,6 +126,22 @@
 
 ## Sécurité
 
+Couches en place (voir `src/middlewares/`) :
+
+| Couche                                                          | Fichier                   | Protège contre     |
+| --------------------------------------------------------------- | ------------------------- | ------------------ |
+| En-têtes (CSP, X-Frame-Options…)                                | `securityHeaders.js`      | XSS, clickjacking  |
+| Contrôle de l'en-tête Host                                      | `requestGuard.js`         | DNS rebinding      |
+| `Sec-Fetch-Site` / `Origin` + `X-USM-Request` sur les écritures | `requestGuard.js`         | CSRF (autre site)  |
+| Identification (cookie signé ou ce PC) + `requireRole`          | `auth.js`                 | Accès non autorisé |
+| Limitation des tentatives de connexion                          | `services/authService.js` | Force brute        |
+
+- Niveaux d'accès : `read` < `write` < `admin`. Toute nouvelle route déclare le sien.
+- Écritures (POST/PUT/PATCH/DELETE) : corps JSON + en-tête `X-USM-Request: 1` (ajouté par
+  `public/js/api.js`) ; validation stricte du corps dans le contrôleur.
+- Le jeton de session n'est jamais lisible en JavaScript (cookie `HttpOnly`, `SameSite=Strict`).
+- Comparaison de secrets uniquement à temps constant (`safeEqual`).
+- Messages d'erreur : jamais de détail technique ni de chemin absolu vers le navigateur.
 - Protection path traversal systématique (voir règle 4 de CLAUDE.md).
 - Limiter la taille des corps JSON (`express.json({ limit })`).
 - `app.disable('x-powered-by')`.

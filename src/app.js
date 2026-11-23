@@ -4,34 +4,89 @@
  * pour pouvoir la tester).
  * @module app
  */
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import { createAuthController } from './controllers/authController.js';
+import { createIdentify } from './middlewares/auth.js';
+import { allowedHostnames, apiGuard, createHostGuard } from './middlewares/requestGuard.js';
+import { securityHeaders } from './middlewares/securityHeaders.js';
 import { createApiRouter } from './routes/api.js';
+import { createAuth } from './services/authService.js';
+import { createFfmpeg } from './services/ffmpegService.js';
+import { createMusicBrainz } from './services/musicBrainzService.js';
+import { createPlaylists } from './services/playlistService.js';
+import { createSongEditor } from './services/songEditService.js';
+import { createVideoConverter } from './services/videoConvertService.js';
 
 const publicDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+/** Bootstrap est servi depuis node_modules (plus de CDN : CSP stricte, fonctionne hors ligne). */
+const bootstrapDir = path.join(
+  path.dirname(createRequire(import.meta.url).resolve('bootstrap/package.json')),
+  'dist',
+);
 
 /**
  * @typedef {object} AppDependencies Services injectés (remplaçables dans les tests).
  * @property {import('./services/catalogService.js').Catalog} catalog
  * @property {import('./services/facetImageService.js').FacetImages} facetImages
+ * @property {import('./services/ffmpegService.js').Ffmpeg} [ffmpeg]  Par défaut : FFMPEG_PATH.
+ * @property {import('./services/playlistService.js').Playlists} [playlists]  Par défaut : PLAYLIST_DIR.
+ * @property {import('./services/musicBrainzService.js').MusicBrainz} [musicBrainz]  Par défaut : API publique.
  */
 
 /**
- * @param {Readonly<import('./config/index.js').AppConfig>} _config
+ * @param {Readonly<import('./config/index.js').AppConfig>} config
  * @param {AppDependencies} deps
  * @returns {import('express').Express}
  */
-export function createApp(_config, deps) {
+export function createApp(config, deps) {
+  const auth = createAuth({ accessKeys: config.accessKeys, sessionDays: config.sessionDays });
+  const editor = createSongEditor({ catalog: deps.catalog, backupDir: config.backupDir });
+  const videos = createVideoConverter({
+    catalog: deps.catalog,
+    editor,
+    ffmpeg: deps.ffmpeg ?? createFfmpeg({ ffmpegPath: config.ffmpegPath }),
+    backupDir: config.backupDir,
+  });
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '1mb' }));
 
-  app.use('/api', createApiRouter(deps));
+  // 1. Sécurité, pour toutes les requêtes
+  app.use(securityHeaders);
+  app.use(createHostGuard(allowedHostnames(config)));
+  app.use(express.json({ limit: '1mb' }));
+  app.use(
+    createIdentify({ auth, trustLocalhost: config.trustLocalhost, publicRead: config.publicRead }),
+  );
+
+  // 2. Lien de connexion (/login?key=…) et API
+  app.get('/login', createAuthController(auth).loginLink);
+  app.use(
+    '/api',
+    apiGuard,
+    createApiRouter({
+      ...deps,
+      playlists:
+        deps.playlists ??
+        createPlaylists({
+          playlistDir: config.playlistDir,
+          catalog: deps.catalog,
+          backupDir: config.backupDir,
+        }),
+      musicBrainz: deps.musicBrainz ?? createMusicBrainz(),
+      auth,
+      editor,
+      videos,
+    }),
+  );
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: { code: 'ROUTE_NOT_FOUND', message: 'Unknown API route' } });
   });
 
+  // 3. Interface (publique : la page de connexion doit pouvoir s'afficher)
+  app.use('/vendor/bootstrap', express.static(bootstrapDir, { maxAge: '7d' }));
   app.use(express.static(publicDir));
 
   app.use(errorHandler);
@@ -49,6 +104,14 @@ export function createApp(_config, deps) {
  * @param {import('express').NextFunction} _next
  */
 function errorHandler(err, _req, res, _next) {
+  const status = /** @type {{ status?: number }} */ (err)?.status;
+  if (status === 400 || status === 413) {
+    // Corps JSON invalide ou trop gros (express.json)
+    res
+      .status(status)
+      .json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+    return;
+  }
   console.error(err);
   res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
 }

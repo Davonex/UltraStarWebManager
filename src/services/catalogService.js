@@ -4,16 +4,24 @@
  * et garde en mémoire la liste des chansons.
  *
  * Lecture seule : ce service ne modifie jamais la bibliothèque.
+ * Les vidéos MP4 sont analysées (codec, résolution) en lisant seulement leur en-tête.
  *
  * @module services/catalogService
  */
 import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { beatToSeconds, parseUltrastarTxt, songWarning } from '../parsers/ultrastarTxt.js';
+import { isOversizedVideo, isRecommendedVideo } from '../parsers/mp4Video.js';
+import {
+  beatToSeconds,
+  parseNumber,
+  parseUltrastarTxt,
+  songWarning,
+} from '../parsers/ultrastarTxt.js';
 import { mapWithConcurrency } from '../utils/concurrency.js';
 import { resolveInside } from '../utils/safePath.js';
 import { fileNameKey, splitList } from '../utils/text.js';
+import { probeVideoFile } from './videoProbe.js';
 
 /** Nombre de fichiers lus en parallèle. */
 const READ_CONCURRENCY = 16;
@@ -51,10 +59,25 @@ const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
  * @property {'tag' | 'medley' | null} previewSource  #PREVIEWSTART, ou début du medley.
  * @property {string | null} formatVersion #VERSION, null = ancien format.
  * @property {SongFiles} files
+ * @property {number} videoGap      Décalage de la vidéo en secondes (#VIDEOGAP, 0 par défaut).
+ * @property {import('./videoProbe.js').ProbedVideo | null} video  Format, codec, résolution
+ *   et date de modification de la vidéo (null sans vidéo).
  * @property {boolean} coverGuessed  Pochette trouvée par le marqueur [CO] et non par #COVER.
  * @property {string} encoding
  * @property {import('../parsers/ultrastarTxt.js').SongWarning[]} warnings
  * @property {number} modifiedAt      Date de modification du .txt (ms).
+ */
+
+/**
+ * @typedef {object} SongDetails Détail complet (fenêtre « info »), relu dans le .txt.
+ * @property {Record<string, string>} headers  Tous les en-têtes bruts.
+ * @property {import('../parsers/ultrastarTxt.js').SongStats} stats
+ * @property {string} encoding
+ * @property {{ bpm: number | null, gap: number | null, videoGap: number | null,
+ *   previewStart: number | null, previewSource: string | null, medleyStart: number | null,
+ *   medleyEnd: number | null, start: number | null, end: number | null }} timing
+ *   Valeurs de synchronisation (GAP en ms, le reste en secondes).
+ * @property {{ p1: string | null, p2: string | null }} singers  Noms des chanteurs d'un duo.
  */
 
 /**
@@ -187,6 +210,16 @@ export function buildSong({ relativeDir, txtFile, fileNames, parsed, modifiedAt 
     }
   }
 
+  // Cas rare : la vidéo sert aussi de musique. Elle ne doit pas être convertie (la conversion
+  // retire la bande son), d'où un avertissement pour la repérer.
+  if (files.audio && files.video && files.audio.toLowerCase() === files.video.toLowerCase()) {
+    warnings.push(
+      songWarning('VIDEO_IS_AUDIO', `Same file for #MP3 and #VIDEO: ${files.video}`, {
+        file: files.video,
+      }),
+    );
+  }
+
   let coverGuessed = false;
   if (!files.cover) {
     files.cover = guessCover(fileNames);
@@ -211,11 +244,44 @@ export function buildSong({ relativeDir, txtFile, fileNames, parsed, modifiedAt 
     ...previewOf(meta),
     formatVersion: meta.version,
     files,
+    videoGap: meta.videoGap ?? 0,
+    video: null,
     coverGuessed,
     encoding,
     warnings,
     modifiedAt,
   };
+}
+
+/**
+ * Ajoute à une chanson la description de sa vidéo, avec un avertissement si ce n'est pas
+ * le format recommandé (MP4 H.264 : lu par UltraStar comme par les navigateurs, décodage
+ * léger), ou si elle est plus grande que 1080p (4K…).
+ *
+ * @param {Song} song
+ * @param {import('./videoProbe.js').ProbedVideo} video
+ * @returns {Song}
+ */
+export function withVideoInfo(song, video) {
+  const warnings = [...song.warnings];
+  if (!isRecommendedVideo(video)) {
+    const format = [video.container.toUpperCase(), video.codec?.toUpperCase()]
+      .filter(Boolean)
+      .join(' ');
+    warnings.push(
+      songWarning('VIDEO_NOT_H264', `Video is ${format}: MP4 H.264 recommended`, { format }),
+    );
+  }
+  if (isOversizedVideo(video)) {
+    const size = `${video.width}×${video.height}`;
+    warnings.push(
+      songWarning('VIDEO_TOO_LARGE', `Video is ${size}: 1080p is enough`, {
+        width: video.width ?? 0,
+        height: video.height ?? 0,
+      }),
+    );
+  }
+  return { ...song, video, warnings };
 }
 
 /**
@@ -292,7 +358,9 @@ export function createCatalog({ songDir, logger = console }) {
         return { skipped: 'Not an UltraStar file (no #TITLE / #ARTIST)' };
       }
       const song = buildSong({ relativeDir, txtFile, fileNames, parsed, modifiedAt: info.mtimeMs });
-      return { song };
+      if (!song.files.video) return { song };
+      const video = await probeVideoFile(path.join(root, relativeDir, song.files.video));
+      return { song: withVideoInfo(song, video) };
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) };
     }
@@ -303,7 +371,8 @@ export function createCatalog({ songDir, logger = console }) {
     if (!songDir) return status;
     const root = path.resolve(songDir);
     const startedAt = Date.now();
-    status = { ...status, state: 'loading', error: null };
+    // Relecture : la liste actuelle reste servie pendant le scan (état « ready » conservé).
+    if (status.state !== 'ready') status = { ...status, state: 'loading', error: null };
 
     try {
       const directories = await findSongDirectories(root);
@@ -381,6 +450,76 @@ export function createCatalog({ songDir, logger = console }) {
     /** @returns {Readonly<CatalogStatus>} */
     getStatus() {
       return status;
+    },
+
+    /**
+     * Détail complet d'une chanson : relit son .txt (tous les en-têtes, statistiques).
+     * @param {Song} song
+     * @returns {Promise<SongDetails | null>} null si le fichier n'est plus lisible.
+     */
+    async readDetails(song) {
+      const folder = songDir ? resolveInside(songDir, song.folder) : null;
+      const file = folder ? resolveInside(folder, song.txtFile) : null;
+      if (!file) return null;
+      try {
+        const parsed = parseUltrastarTxt(await readFile(file));
+        const { meta } = parsed;
+        /** @param {number | null} beat */
+        const seconds = (beat) =>
+          beat === null || meta.bpm === null ? null : beatToSeconds(beat, meta.bpm, meta.gap);
+        return {
+          headers: parsed.headers,
+          stats: parsed.stats,
+          encoding: parsed.encoding,
+          timing: {
+            bpm: meta.bpm,
+            gap: meta.gap,
+            videoGap: meta.videoGap,
+            previewStart: song.previewStart,
+            previewSource: song.previewSource,
+            medleyStart: seconds(meta.medleyStartBeat),
+            medleyEnd: seconds(meta.medleyEndBeat),
+            start: parseNumber(parsed.headers.START),
+            end: parseNumber(parsed.headers.END),
+          },
+          singers: {
+            p1: parsed.headers.P1 ?? parsed.headers.DUETSINGERP1 ?? null,
+            p2: parsed.headers.P2 ?? parsed.headers.DUETSINGERP2 ?? null,
+          },
+        };
+      } catch {
+        return null;
+      }
+    },
+
+    /**
+     * Fichier .txt absolu d'une chanson, garanti à l'intérieur de SONG_DIR (sinon null).
+     * @param {Song} song
+     * @returns {string | null}
+     */
+    resolveSongFile(song) {
+      const folder = songDir ? resolveInside(songDir, song.folder) : null;
+      return folder ? resolveInside(folder, song.txtFile) : null;
+    },
+
+    /**
+     * Relit une seule chanson (après une modification) et met le catalogue à jour.
+     * @param {string} id
+     * @returns {Promise<Song | null>} La chanson à jour, ou null si elle n'est plus lisible.
+     */
+    async refreshSong(id) {
+      const song = songsById.get(id);
+      if (!song || !songDir) return null;
+      const root = path.resolve(songDir);
+      const relativeDir = song.folder.split('/').join(path.sep);
+      const entries = await readdir(path.join(root, relativeDir), { withFileTypes: true });
+      const fileNames = entries.filter((e) => e.isFile()).map((e) => e.name);
+      const result = await readSong(root, { relativeDir, fileNames }, song.txtFile);
+      if (!result.song) return null;
+      const updated = result.song;
+      songs = songs.map((s) => (s.id === id ? updated : s)).sort(compareSongs);
+      songsById.set(id, updated);
+      return updated;
     },
 
     /**

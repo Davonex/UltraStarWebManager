@@ -1,5 +1,8 @@
 // @ts-check
+
 import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { createApp } from '../../src/app.js';
 import { loadConfig } from '../../src/config/index.js';
@@ -54,6 +57,59 @@ describe('GET /api/songs', () => {
   });
 });
 
+describe('GET /api/songs/:id — détail', () => {
+  it('relit le .txt : en-têtes, statistiques, synchronisation, duo', async () => {
+    const library = await createSongLibrary(SAMPLE_LIBRARY);
+    const catalog = createCatalog({ songDir: library.root, logger: silentLogger });
+    await catalog.load();
+    const app = await startApp(catalog);
+    try {
+      const duo = catalog.getSongs().find((s) => s.title === 'Test');
+      assert.ok(duo);
+      const res = await fetch(`${app.baseUrl}/api/songs/${duo.id}`);
+      assert.equal(res.status, 200);
+      const { song, details } = (await res.json()).data;
+      assert.equal(song.id, duo.id);
+      assert.equal(details.headers.AUDIO, 'duo.mp3');
+      assert.equal(details.timing.bpm, 250);
+      assert.deepEqual(details.singers, { p1: 'A', p2: 'B' });
+      assert.equal(details.stats.notes, 2);
+      assert.equal(details.stats.isDuet, true);
+
+      const missing = await fetch(`${app.baseUrl}/api/songs/inconnu`);
+      assert.equal(missing.status, 404);
+    } finally {
+      await app.close();
+      await library.cleanup();
+    }
+  });
+});
+
+describe('POST /api/catalog/rescan', () => {
+  it('relit la bibliothèque et voit les nouvelles chansons', async () => {
+    const library = await createSongLibrary(SAMPLE_LIBRARY);
+    const catalog = createCatalog({ songDir: library.root, logger: silentLogger });
+    await catalog.load();
+    const app = await startApp(catalog);
+    try {
+      await writeFile(
+        path.join(library.root, 'Zazie - Zen', 'bonus.txt'),
+        '#TITLE:Bonus\n#ARTIST:Zazie\n#MP3:Zazie - Zen.mp3\n#BPM:300\n: 0 1 0 la\nE\n',
+      );
+      const res = await fetch(`${app.baseUrl}/api/catalog/rescan`, {
+        method: 'POST',
+        headers: { 'X-USM-Request': '1', 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      assert.equal(res.status, 200);
+      assert.equal((await res.json()).data.count, 5);
+    } finally {
+      await app.close();
+      await library.cleanup();
+    }
+  });
+});
+
 describe('GET /api/songs/:id/cover', () => {
   /** @type {Awaited<ReturnType<typeof createSongLibrary>>} */
   let library;
@@ -67,6 +123,7 @@ describe('GET /api/songs/:id/cover', () => {
       ...SAMPLE_LIBRARY,
       'Zazie - Zen/Zazie - Zen.jpg': Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]),
       'Zazie - Zen/Zazie - Zen.mp3': Buffer.from('ID3-0123456789'),
+      'Duo - Test/duo.mp4': Buffer.from('VIDEO-0123456789'),
     });
     catalog = createCatalog({ songDir: library.root, logger: silentLogger });
     await catalog.load();
@@ -134,6 +191,22 @@ describe('GET /api/songs/:id/cover', () => {
     } finally {
       missing.files.audio = saved;
     }
+  });
+
+  it('sert la vidéo avec requêtes partielles', async () => {
+    const id = idOf('Test');
+    const res = await fetch(`${app.baseUrl}/api/songs/${id}/video`, {
+      headers: { Range: 'bytes=6-9' },
+    });
+    assert.equal(res.status, 206);
+    assert.equal(res.headers.get('content-type'), 'video/mp4');
+    assert.equal(await res.text(), '0123');
+  });
+
+  it('404 VIDEO_NOT_FOUND pour une chanson sans vidéo', async () => {
+    const res = await fetch(`${app.baseUrl}/api/songs/${idOf('Zen')}/video`);
+    assert.equal(res.status, 404);
+    assert.equal((await res.json()).error.code, 'VIDEO_NOT_FOUND');
   });
 
   it('404 COVER_NOT_FOUND pour une chanson sans pochette', async () => {

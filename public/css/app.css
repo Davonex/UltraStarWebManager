@@ -268,7 +268,7 @@ body:has(#player-bar:not([hidden])) main {
   right: 0;
   bottom: 0;
   left: 0;
-  padding: 1.25rem 0.5rem 0.4rem;
+  padding: 1.25rem 2.4rem 0.4rem; /* place pour le bouton « i » */
   text-align: center;
   color: #fff;
   text-shadow: 0 1px 2px rgb(0 0 0 / 80%);
@@ -346,4 +346,511 @@ body:has(#player-bar:not([hidden])) main {
 #player-bar .progress-bar {
   position: relative; /* au-dessus de la zone de l'extrait */
   transition: none;
+}
+
+/* Indicateurs en haut à droite de la pochette (ex. vidéo disponible). */
+.song-flags {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.song-flags:empty {
+  display: none;
+}
+
+.song-video-icon {
+  box-sizing: content-box;
+  padding: 0.2rem;
+  background-color: rgb(255 255 255 / 90%);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+}
+
+/* Icônes Bootstrap Icons (sprite public/img/vendor/bootstrap-icons/icons.svg). */
+.bi {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  fill: currentColor;
+  vertical-align: -0.125em;
+}
+
+.facet-chip .bi {
+  opacity: 0.85;
+}
+
+.facet-chip.dropdown-toggle::after {
+  margin-left: 0.1rem;
+}
+
+/* Pastille « Avertissements » : icône jaune, fond jaune quand le filtre est actif. */
+.facet-chip-warning .bi {
+  color: var(--bs-warning);
+  opacity: 1;
+}
+
+.facet-chip-warning.active {
+  color: var(--bs-dark);
+  background-color: var(--bs-warning);
+  border-color: var(--bs-warning);
+}
+
+.facet-chip-warning.active .bi {
+  color: var(--bs-dark);
+}
+
+/* --- Vidéo au-dessus de la barre de lecture ------------------------------------------ */
+
+.video-panel {
+  position: absolute;
+  right: 0.75rem;
+  bottom: calc(100% + 0.5rem);
+  width: min(24rem, calc(100vw - 1.5rem));
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background-color: #000;
+  border-radius: 0.75rem;
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 50%);
+}
+
+.video-panel video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.player-video.active {
+  background-color: var(--bs-primary);
+}
+
+/* Plus de place en bas de page quand la vidéo est affichée. */
+body:has(#video-panel:not([hidden])) main {
+  padding-bottom: calc(6rem + min(24rem, 100vw - 1.5rem) * 9 / 16);
+}
+
+/* Bouton « Actualiser » : l'icône tourne pendant la relecture. */
+#rescan-button.is-busy .bi {
+  animation: usm-spin 0.8s linear infinite;
+}
+
+@keyframes usm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #rescan-button.is-busy .bi {
+    animation: none;
+  }
+}
+
+/* --- Bouton « i » en bas à gauche de la pochette ------------------------------------- */
+
+.song-info {
+  position: absolute;
+  bottom: 0.45rem;
+  left: 0.45rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  color: #fff;
+  background-color: rgb(33 37 41 / 55%);
+  border: 2px solid rgb(255 255 255 / 85%);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.song-info:hover,
+.song-info:focus-visible {
+  background-color: var(--bs-primary);
+  outline: none;
+}
+
+/* --- Fenêtre de détail ------------------------------------------------------------- */
+
+.song-details {
+  overflow: hidden;
+}
+
+.song-details-hero {
+  position: relative;
+  flex-shrink: 0; /* fenêtre défilante : seul le corps défile, l'en-tête garde sa hauteur */
+  overflow: hidden;
+  color: #fff;
+  background-color: #111;
+}
+
+.song-details-bg {
+  position: absolute;
+  inset: -2rem;
+  width: calc(100% + 4rem);
+  height: calc(100% + 4rem);
+  object-fit: cover;
+  filter: blur(24px) brightness(0.45);
+  transform: scale(1.1);
+}
+
+.song-details-head {
+  position: relative;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  padding: 1.25rem;
+}
+
+.song-details-cover {
+  flex-shrink: 0;
+  width: clamp(6.5rem, 28vw, 9rem);
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 0.75rem;
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 50%);
+}
+
+.song-details-text {
+  min-width: 0;
+  flex-grow: 1;
+}
+
+.song-details-artist {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.song-details-title {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.song-details-play {
+  --play-size: 3rem;
+}
+
+.song-details-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+}
+
+.details-section {
+  margin-bottom: 1.25rem;
+}
+
+.details-heading {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color);
+}
+
+summary.details-heading {
+  cursor: pointer;
+}
+
+.details-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem 0.5rem;
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .details-list {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.details-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 40%) 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.5rem;
+  /* Chaque ligne est une « carte » (avant : une ligne sur deux, donc seulement la colonne
+     de gauche en affichage sur deux colonnes). */
+  background-color: var(--bs-tertiary-bg);
+}
+
+.details-row dt {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  font-weight: 600;
+  color: var(--bs-secondary-color);
+}
+
+.details-row-icon {
+  color: var(--bs-primary);
+}
+
+.details-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.details-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.details-chip {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.15rem 0.6rem 0.15rem 0.2rem;
+  font-size: 0.85rem;
+  background-color: var(--bs-secondary-bg);
+  border-radius: 50rem;
+}
+
+.details-chip:not(:has(img)) {
+  padding-left: 0.6rem;
+}
+
+.details-chip-img {
+  width: 1.4rem;
+  height: 1.4rem;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.details-file {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.details-warnings {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+/* --- Modification sur place (double-clic) dans la fenêtre de détail ---------------- */
+
+.details-editable {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: -0.2rem -0.35rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px dashed transparent;
+  border-radius: 0.5rem;
+  cursor: text;
+}
+
+.details-editable:hover {
+  border-color: var(--bs-border-color);
+}
+
+.details-editable.is-editing {
+  align-items: flex-start;
+  border-color: transparent;
+  cursor: auto;
+}
+
+.details-editable-value {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.details-edit-btn {
+  flex-shrink: 0;
+  padding: 0.15rem 0.35rem;
+  color: var(--bs-secondary-color);
+  background: transparent;
+  border: 0;
+  border-radius: 0.35rem;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.details-editable:hover .details-edit-btn,
+.details-edit-btn:focus-visible {
+  opacity: 1;
+}
+
+.details-edit-btn:hover,
+.details-edit-btn:focus-visible {
+  color: var(--bs-primary);
+  outline: none;
+}
+
+/* Écran tactile : pas de survol, le crayon reste visible. */
+@media (hover: none) {
+  .details-edit-btn {
+    opacity: 1;
+  }
+}
+
+.details-inline-field {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.details-inline-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.25rem;
+}
+
+.chips-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  min-height: 2.4rem;
+  padding: 0.3rem 0.4rem;
+  background-color: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+}
+
+.chips-input:focus-within {
+  border-color: var(--bs-primary);
+  box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.chips-input-list {
+  display: contents;
+}
+
+.chips-input-chip {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0.1rem 0.2rem 0.1rem 0.6rem;
+  font-size: 0.85rem;
+  color: #fff;
+  background-color: var(--bs-primary);
+  border-radius: 50rem;
+}
+
+.chips-input-remove {
+  width: 1.2rem;
+  height: 1.2rem;
+  padding: 0;
+  line-height: 1;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.chips-input-remove:hover,
+.chips-input-remove:focus-visible {
+  background-color: rgb(255 255 255 / 25%);
+  outline: none;
+}
+
+.chips-input-field {
+  flex: 1 1 8rem;
+  min-width: 8rem;
+  color: var(--bs-body-color);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+/* Corrections en masse (public/js/bulkTools.js) */
+.bulk-table {
+  max-height: 50vh;
+}
+.bulk-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bs-body-bg);
+}
+.bulk-progress {
+  height: 0.5rem;
+}
+
+/* Conversion vidéo (fenêtre info) */
+.details-video-progress {
+  display: block;
+  width: 100%;
+  max-width: 20rem;
+  height: 0.5rem;
+}
+
+/* Mosaïque des pochettes d'une playlist (public/js/playlistCovers.js) */
+.facet-option-mosaic {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  overflow: hidden;
+  background-color: var(--bs-tertiary-bg);
+}
+.facet-option-mosaic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.facet-option-mosaic.is-1 {
+  grid-template-columns: 1fr;
+}
+.facet-option-mosaic.is-2 img,
+.facet-option-mosaic.is-3 img:first-child {
+  grid-row: span 2;
+}
+
+/* Panneau MusicBrainz (public/js/musicBrainzPanel.js) */
+.mb-table th[scope="row"] {
+  width: 7rem;
+}
+.mb-table td {
+  overflow-wrap: anywhere;
+}
+
+/* Bouton à droite d'un titre de section (MusicBrainz à côté de « Informations ») */
+.details-heading-action {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.min-w-0 {
+  min-width: 0;
+}
+
+/* Menu « Playlists » de la barre de lecture (public/js/playlistMenu.js) */
+.playlist-menu {
+  min-width: 16rem;
+  max-width: min(22rem, 90vw);
+}
+.playlist-menu-list {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.playlist-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.25rem 0.35rem 1.85rem;
+  margin: 0;
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+.playlist-menu-item:hover {
+  background-color: var(--bs-tertiary-bg);
 }

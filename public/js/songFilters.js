@@ -13,7 +13,7 @@
 
 /** @typedef {'artist' | 'title' | 'year-desc' | 'year-asc' | 'recent'} SortKey */
 
-/** @typedef {'language' | 'decade' | 'genre' | 'edition' | 'tag'} FacetKey */
+/** @typedef {'language' | 'decade' | 'genre' | 'edition' | 'tag' | 'playlist'} FacetKey */
 
 /**
  * @typedef {object} FilterCriteria
@@ -23,7 +23,9 @@
  * @property {string[]} genre
  * @property {string[]} edition    #EDITION
  * @property {string[]} tag        #TAGS
+ * @property {string[]} playlist   Playlists .upl (noms)
  * @property {boolean} duet        Uniquement les duos.
+ * @property {boolean} warnings    Uniquement les chansons avec avertissements.
  * @property {SortKey} sort
  */
 
@@ -36,7 +38,14 @@
 
 /** Facettes dans l'ordre d'affichage. */
 /** @type {readonly FacetKey[]} */
-export const FACET_KEYS = Object.freeze(['language', 'decade', 'genre', 'edition', 'tag']);
+export const FACET_KEYS = Object.freeze([
+  'language',
+  'decade',
+  'genre',
+  'edition',
+  'tag',
+  'playlist',
+]);
 
 /** @type {readonly SortKey[]} */
 export const SORT_KEYS = Object.freeze(['artist', 'title', 'year-desc', 'year-asc', 'recent']);
@@ -50,7 +59,9 @@ export function defaultCriteria() {
     genre: [],
     edition: [],
     tag: [],
+    playlist: [],
     duet: false,
+    warnings: false,
     sort: 'artist',
   };
 }
@@ -58,7 +69,7 @@ export function defaultCriteria() {
 /** Facettes numériques : triées par valeur décroissante plutôt que par nombre de chansons. */
 const NUMERIC_FACETS = new Set(['decade']);
 /** Facettes triées par ordre alphabétique (trop de valeurs pour un tri par popularité). */
-const ALPHABETICAL_FACETS = new Set(['edition']);
+const ALPHABETICAL_FACETS = new Set(['edition', 'playlist']);
 
 /**
  * Texte de comparaison : minuscules, sans accents, espaces réduits.
@@ -90,6 +101,8 @@ export function facetValues(song, key) {
       return song.editions;
     case 'tag':
       return song.tags;
+    case 'playlist':
+      return song.playlists ?? []; // ajouté par main.js à partir de GET /api/playlists
     case 'decade':
       return song.decade === null ? [] : [String(song.decade)];
     default:
@@ -123,6 +136,7 @@ export function matchesCriteria(song, criteria, ignoredFacet = null) {
     if (!words.every((word) => haystack.includes(word))) return false;
   }
   if (criteria.duet && !song.isDuet) return false;
+  if (criteria.warnings && song.warnings.length === 0) return false;
   return FACET_KEYS.every((key) => key === ignoredFacet || matchesFacet(song, key, criteria[key]));
 }
 
@@ -249,7 +263,9 @@ export function criteriaFromParams(params) {
   criteria.genre = list('genre');
   criteria.edition = list('edition');
   criteria.tag = list('tag');
+  criteria.playlist = list('playlist');
   criteria.duet = params.get('duet') === '1';
+  criteria.warnings = params.get('warnings') === '1';
   if (SORT_KEYS.includes(sort)) criteria.sort = sort;
   return criteria;
 }
@@ -266,6 +282,7 @@ export function criteriaToParams(criteria) {
     for (const value of criteria[key]) params.append(key, value);
   }
   if (criteria.duet) params.set('duet', '1');
+  if (criteria.warnings) params.set('warnings', '1');
   if (criteria.sort !== 'artist') params.set('sort', criteria.sort);
   return params;
 }
@@ -277,6 +294,9 @@ export function criteriaToParams(criteria) {
  */
 export function hasActiveFilter(criteria) {
   return (
-    criteria.q.trim() !== '' || criteria.duet || FACET_KEYS.some((key) => criteria[key].length > 0)
+    criteria.q.trim() !== '' ||
+    criteria.duet ||
+    criteria.warnings ||
+    FACET_KEYS.some((key) => criteria[key].length > 0)
   );
 }

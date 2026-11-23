@@ -18,8 +18,9 @@ const PLACEHOLDER_COVER = '/img/no-cover.svg';
  * @param {() => void} handlers.onStop
  * @param {(volume: number) => void} handlers.onVolume
  * @param {(seconds: number) => void} handlers.onSeek  Déplacement dans la chanson.
+ * @param {() => void} handlers.onToggleVideo  Affiche / masque la vidéo.
  */
-export function createPlayerBar(root, { onToggle, onStop, onVolume, onSeek }) {
+export function createPlayerBar(root, { onToggle, onStop, onVolume, onSeek, onToggleVideo }) {
   /** @param {string} selector */
   const $ = (selector) => /** @type {HTMLElement} */ (root.querySelector(selector));
   const cover = /** @type {HTMLImageElement} */ ($('.player-cover'));
@@ -111,7 +112,9 @@ export function createPlayerBar(root, { onToggle, onStop, onVolume, onSeek }) {
     onSeek(targets[event.key]);
   });
 
+  const videoButton = /** @type {HTMLButtonElement} */ ($('[data-action="video"]'));
   toggleButton.addEventListener('click', onToggle);
+  videoButton.addEventListener('click', onToggleVideo);
   $('[data-action="stop"]').addEventListener('click', onStop);
   volume.addEventListener('input', () => onVolume(Number(volume.value) / 100));
   cover.addEventListener('error', () => {
@@ -119,8 +122,17 @@ export function createPlayerBar(root, { onToggle, onStop, onVolume, onSeek }) {
   });
 
   return {
-    /** @param {PlayerState} state */
-    render(state) {
+    /**
+     * @param {PlayerState} state
+     * @param {{ available: boolean, enabled: boolean }} [video]  Vidéo de la chanson en cours.
+     */
+    render(state, video = { available: false, enabled: false }) {
+      videoButton.hidden = !video.available;
+      videoButton.classList.toggle('active', video.enabled);
+      videoButton.setAttribute('aria-pressed', String(video.enabled));
+      const videoLabel = t(video.enabled ? 'player.hideVideo' : 'player.showVideo');
+      videoButton.title = videoLabel;
+      videoButton.setAttribute('aria-label', videoLabel);
       root.hidden = state.song === null;
       volume.value = String(Math.round(state.volume * 100));
       if (!state.song) {

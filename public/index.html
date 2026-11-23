@@ -6,7 +6,7 @@
     <title>UltraStarWebManager</title>
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+      href="/vendor/bootstrap/css/bootstrap.min.css"
     />
     <link rel="stylesheet" href="/css/app.css" />
   </head>
@@ -19,6 +19,45 @@
       <div class="container-fluid gap-2 flex-nowrap">
         <span class="navbar-brand me-auto text-truncate" data-i18n="app.title">UltraStarWebManager</span>
         <span id="server-status" class="badge text-bg-secondary">Connecting…</span>
+        <span id="role-badge" class="badge text-bg-secondary" hidden></span>
+        <button
+          id="bulk-button"
+          type="button"
+          class="btn btn-sm btn-outline-secondary"
+          title="Bulk corrections"
+          aria-label="Bulk corrections"
+          data-i18n-title="bulk.title"
+          data-i18n-aria-label="bulk.title"
+          data-bs-toggle="modal"
+          data-bs-target="#bulk-modal"
+          hidden
+        >
+          <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#tools" /></svg>
+        </button>
+        <button
+          id="login-button"
+          type="button"
+          class="btn btn-sm btn-outline-primary"
+          title="Sign in"
+          aria-label="Sign in"
+          data-i18n-title="auth.signInHint"
+          data-i18n-aria-label="auth.signInHint"
+          hidden
+        >
+          <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#box-arrow-in-right" /></svg>
+        </button>
+        <button
+          id="logout-button"
+          type="button"
+          class="btn btn-sm btn-outline-secondary"
+          title="Sign out"
+          aria-label="Sign out"
+          data-i18n-title="auth.logout"
+          data-i18n-aria-label="auth.logout"
+          hidden
+        >
+          <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#box-arrow-right" /></svg>
+        </button>
         <select
           id="language-select"
           class="form-select form-select-sm w-auto"
@@ -45,47 +84,118 @@
           <!-- Pastilles : chaque facette ouvre la fenêtre de choix (public/js/filtersView.js) -->
           <div class="d-flex flex-wrap gap-2 mb-2">
             <button type="button" class="facet-chip" data-facet="language" aria-pressed="false">
+              <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#globe2" /></svg>
               <span data-i18n="filters.language">Language</span>
               <span class="facet-chip-count badge rounded-pill" hidden></span>
             </button>
             <button type="button" class="facet-chip" data-facet="decade" aria-pressed="false">
+              <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#calendar3" /></svg>
               <span data-i18n="filters.decade">Decade</span>
               <span class="facet-chip-count badge rounded-pill" hidden></span>
             </button>
             <button type="button" class="facet-chip" data-facet="genre" aria-pressed="false">
+              <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#music-note-beamed" /></svg>
               <span data-i18n="filters.genre">Genre</span>
               <span class="facet-chip-count badge rounded-pill" hidden></span>
             </button>
             <button type="button" class="facet-chip" data-facet="edition" aria-pressed="false">
+              <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#collection" /></svg>
               <span data-i18n="filters.edition">Edition</span>
               <span class="facet-chip-count badge rounded-pill" hidden></span>
             </button>
             <button type="button" class="facet-chip" data-facet="tag" aria-pressed="false">
+              <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#tags" /></svg>
               <span data-i18n="filters.tag">Tags</span>
               <span class="facet-chip-count badge rounded-pill" hidden></span>
             </button>
+            <!-- Visible seulement s'il y a des playlists (PLAYLIST_DIR) -->
+            <button type="button" class="facet-chip" data-facet="playlist" aria-pressed="false" hidden>
+              <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#music-note-list" /></svg>
+              <span data-i18n="filters.playlist">Playlists</span>
+              <span class="facet-chip-count badge rounded-pill" hidden></span>
+            </button>
             <button type="button" class="facet-chip" data-action="duet" aria-pressed="false">
+              <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#people-fill" /></svg>
               <span data-i18n="filters.duetOnly">Duets</span>
             </button>
+            <button type="button" class="facet-chip facet-chip-warning" data-action="warnings" aria-pressed="false">
+              <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#exclamation-triangle-fill" /></svg>
+              <span data-i18n="filters.withWarnings">Warnings</span>
+            </button>
             <button type="button" class="facet-chip facet-chip-reset" data-action="reset" hidden>
-              ✕ <span data-i18n="filters.reset">Reset</span>
+              <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#x-lg" /></svg>
+              <span data-i18n="filters.reset">Reset</span>
             </button>
           </div>
 
           <div class="d-flex align-items-center gap-2">
-            <select
-              name="sort"
-              class="form-select form-select-sm w-auto"
-              aria-label="Sort by"
-              data-i18n-aria-label="filters.sort"
-            >
-              <option value="artist" data-i18n="filters.sortArtist">Sort: artist</option>
-              <option value="title" data-i18n="filters.sortTitle">Sort: title</option>
-              <option value="year-desc" data-i18n="filters.sortYearDesc">Sort: newest year</option>
-              <option value="year-asc" data-i18n="filters.sortYearAsc">Sort: oldest year</option>
-              <option value="recent" data-i18n="filters.sortRecent">Sort: recently modified</option>
-            </select>
+            <!-- Tri : menu déroulant Bootstrap (un <select> ne peut pas afficher d'icônes) -->
+            <div class="dropdown">
+              <button
+                type="button"
+                class="facet-chip dropdown-toggle"
+                data-action="sort"
+                data-bs-toggle="dropdown"
+                aria-expanded="false"
+                title="Sort by"
+                data-i18n-title="filters.sort"
+              >
+                <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#sort-down" /></svg>
+                <span class="sort-label">Artist</span>
+              </button>
+              <ul class="dropdown-menu">
+                <li>
+                  <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-sort="artist">
+                    <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#person-fill" /></svg>
+                    <span data-i18n="filters.sortArtist">Artist</span>
+                  </button>
+                </li>
+                <li>
+                  <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-sort="title">
+                    <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#fonts" /></svg>
+                    <span data-i18n="filters.sortTitle">Title</span>
+                  </button>
+                </li>
+                <li>
+                  <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-sort="year-desc">
+                    <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#sort-numeric-down-alt" /></svg>
+                    <span data-i18n="filters.sortYearDesc">Newest year</span>
+                  </button>
+                </li>
+                <li>
+                  <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-sort="year-asc">
+                    <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#sort-numeric-down" /></svg>
+                    <span data-i18n="filters.sortYearAsc">Oldest year</span>
+                  </button>
+                </li>
+                <li>
+                  <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-sort="recent">
+                    <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#clock-history" /></svg>
+                    <span data-i18n="filters.sortRecent">Recently modified</span>
+                  </button>
+                </li>
+              </ul>
+            </div>
+            <div class="form-check form-switch mb-0 ms-1" title="Play videos" data-i18n-title="filters.videosHint">
+              <input id="video-switch" type="checkbox" class="form-check-input" />
+              <label for="video-switch" class="form-check-label small">
+                <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#film" /></svg>
+                <span data-i18n="filters.videos">Videos</span>
+              </label>
+            </div>
             <p id="results-count" class="small text-body-secondary mb-0 ms-auto" aria-live="polite"></p>
+            <button
+              id="rescan-button"
+              type="button"
+              class="facet-chip"
+              title="Re-read the song files"
+              aria-label="Re-read the song files"
+              data-i18n-title="catalog.rescan"
+              data-i18n-aria-label="catalog.rescan"
+              hidden
+            >
+              <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#arrow-clockwise" /></svg>
+            </button>
           </div>
         </form>
       </search>
@@ -101,6 +211,7 @@
           <div class="position-relative">
             <img class="song-cover d-block w-100" loading="lazy" decoding="async" alt="" />
             <div class="song-badges"></div>
+            <div class="song-flags"></div>
             <button
               type="button"
               class="play-button song-play"
@@ -111,6 +222,9 @@
               <svg class="icon icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" /></svg>
               <svg class="icon icon-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
               <span class="icon icon-loading spinner-border" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="song-info" data-action="info" aria-label="Song details">
+              <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#info-lg" /></svg>
             </button>
             <!-- Artiste et titre en surimpression au bas de la pochette -->
             <div class="song-caption">
@@ -159,8 +273,281 @@
       </div>
     </div>
 
+    <!-- Détail d'une chanson (public/js/songDetails.js) -->
+    <div
+      id="song-modal"
+      class="modal fade"
+      role="dialog"
+      tabindex="-1"
+      aria-labelledby="song-modal-title"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
+        <div class="modal-content song-details">
+          <div class="song-details-hero">
+            <img class="song-details-bg" alt="" aria-hidden="true" />
+            <div class="song-details-head">
+              <img class="song-details-cover" width="140" height="140" alt="" />
+              <div class="song-details-text">
+                <p class="song-details-artist mb-1"></p>
+                <h2 id="song-modal-title" class="song-details-title h4 mb-2">Song</h2>
+                <div class="song-details-badges d-flex flex-wrap gap-1 mb-2"></div>
+                <button type="button" class="play-button song-details-play" data-action="details-play" data-state="play">
+                  <svg class="icon icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" /></svg>
+                </button>
+              </div>
+              <button
+                type="button"
+                class="btn-close btn-close-white song-details-close"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+                data-i18n-aria-label="common.close"
+              ></button>
+            </div>
+          </div>
+          <div class="modal-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Corrections en masse (public/js/bulkTools.js) -->
+    <div id="bulk-modal" class="modal fade" role="dialog" tabindex="-1" aria-labelledby="bulk-modal-title" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 id="bulk-modal-title" class="modal-title h5">
+              <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#tools" /></svg>
+              <span data-i18n="bulk.title">Bulk corrections</span>
+            </h2>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+              data-i18n-aria-label="common.close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <p class="small text-body-secondary" data-i18n="bulk.intro">
+              Each correction is simulated first: nothing is written until you confirm. Every changed
+              file is backed up first.
+            </p>
+            <div class="nav nav-tabs mb-3" role="tablist">
+              <button
+                id="bulk-tab-utf8"
+                class="nav-link active"
+                type="button"
+                role="tab"
+                data-bs-toggle="tab"
+                data-bs-target="#bulk-pane-utf8"
+                aria-controls="bulk-pane-utf8"
+                aria-selected="true"
+              >
+                <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#file-earmark-text" /></svg>
+                <span data-i18n="bulk.utf8.tab">UTF-8 encoding</span>
+              </button>
+              <button
+                id="bulk-tab-video"
+                class="nav-link"
+                type="button"
+                role="tab"
+                data-bs-toggle="tab"
+                data-bs-target="#bulk-pane-video"
+                aria-controls="bulk-pane-video"
+                aria-selected="false"
+              >
+                <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#film" /></svg>
+                <span data-i18n="bulk.video.tab">MP4 H.264 videos</span>
+              </button>
+            </div>
+            <div class="tab-content">
+              <div id="bulk-pane-utf8" class="tab-pane fade show active" role="tabpanel" aria-labelledby="bulk-tab-utf8">
+              <section class="bulk-tool" data-bulk-tool="utf8" aria-labelledby="bulk-utf8-title">
+                <h3 id="bulk-utf8-title" class="h6" data-i18n="bulk.utf8.title">Convert to UTF-8 (without BOM)</h3>
+                <p class="small text-body-secondary" data-i18n="bulk.utf8.hint">
+                  Rewrites files saved in another encoding (or with a BOM): same text and line endings.
+                </p>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                  <button type="button" class="btn btn-sm btn-outline-primary" data-part="simulate">
+                    <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#arrow-repeat" /></svg>
+                    <span data-i18n="bulk.simulate">Simulate</span>
+                  </button>
+                  <p class="small mb-0" data-part="status" aria-live="polite"></p>
+                </div>
+                <progress class="bulk-progress w-100 mb-2" data-part="progress" hidden></progress>
+                <ul class="small text-danger mb-2" data-part="errors" hidden></ul>
+                <button type="button" class="btn btn-sm btn-primary mb-2" data-part="apply" hidden>Convert</button>
+                <div data-part="list" hidden>
+                  <div class="table-responsive bulk-table">
+                    <table class="table table-sm align-middle mb-2">
+                      <thead>
+                        <tr>
+                          <th scope="col">
+                            <input
+                              type="checkbox"
+                              class="form-check-input"
+                              data-part="select-all"
+                              aria-label="Select all"
+                              data-i18n-aria-label="bulk.selectAll"
+                            />
+                          </th>
+                          <th scope="col" data-i18n="bulk.song">Song</th>
+                          <th scope="col" data-i18n="bulk.file">File</th>
+                          <th scope="col" data-i18n="bulk.encoding">Encoding</th>
+                        </tr>
+                      </thead>
+                      <tbody data-part="rows"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+              </div>
+              <div id="bulk-pane-video" class="tab-pane fade" role="tabpanel" aria-labelledby="bulk-tab-video">
+                <section class="bulk-tool" data-bulk-tool="video" aria-labelledby="bulk-video-title">
+                  <h3 id="bulk-video-title" class="h6" data-i18n="bulk.video.title">Convert videos to MP4 H.264</h3>
+                  <p class="small text-body-secondary" data-i18n="bulk.video.hint">
+                    Original resolution kept, reduced to 1080p if larger (never enlarged). Videos are
+                    converted one after the other in the background: you can close this window.
+                  </p>
+                  <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-part="simulate">
+                      <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#arrow-repeat" /></svg>
+                      <span data-i18n="bulk.simulate">Simulate</span>
+                    </button>
+                    <p class="small mb-0" data-part="status" aria-live="polite"></p>
+                  </div>
+                  <p class="small text-body-secondary mb-2" data-part="note" hidden></p>
+                  <div class="bulk-running mb-2" data-part="running" hidden>
+                    <progress class="bulk-progress w-100 mb-1" data-part="progress"></progress>
+                    <p class="small mb-1" data-part="current" aria-live="polite"></p>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-part="stop">
+                      <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#x-lg" /></svg>
+                      <span data-i18n="bulk.video.stop">Stop after the current video</span>
+                    </button>
+                  </div>
+                  <p class="small mb-2" data-part="summary" role="status" hidden></p>
+                  <ul class="small text-danger mb-2" data-part="errors" hidden></ul>
+                  <div data-part="list" hidden>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                      <label class="small" for="bulk-video-batch" data-i18n="bulk.video.batchSize">Batch size</label>
+                      <select id="bulk-video-batch" class="form-select form-select-sm w-auto" data-part="batch-size">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="0" data-i18n="bulk.video.all">All</option>
+                      </select>
+                      <button type="button" class="btn btn-sm btn-primary" data-part="apply">Convert</button>
+                    </div>
+                    <div class="table-responsive bulk-table">
+                      <table class="table table-sm align-middle mb-2">
+                        <thead>
+                          <tr>
+                            <th scope="col">
+                              <input
+                                type="checkbox"
+                                class="form-check-input"
+                                data-part="select-all"
+                                aria-label="Select all"
+                                data-i18n-aria-label="bulk.selectAll"
+                              />
+                            </th>
+                            <th scope="col" data-i18n="bulk.song">Song</th>
+                            <th scope="col" data-i18n="details.videoFormat">Video format</th>
+                            <th scope="col" data-i18n="details.resolution">Resolution</th>
+                            <th scope="col" class="text-end" data-i18n="bulk.size">Size</th>
+                          </tr>
+                        </thead>
+                        <tbody data-part="rows"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MusicBrainz : propositions et validation (public/js/musicBrainzPanel.js) -->
+    <div id="musicbrainz-modal" class="modal fade" role="dialog" tabindex="-1" aria-labelledby="musicbrainz-modal-title" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div class="min-w-0">
+              <h2 id="musicbrainz-modal-title" class="modal-title h5">
+                <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#search" /></svg>
+                <span data-i18n="musicbrainz.title">MusicBrainz</span>
+              </h2>
+              <p class="mb-subtitle small text-body-secondary mb-0 text-truncate"></p>
+            </div>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+              data-i18n-aria-label="common.close"
+            ></button>
+          </div>
+          <div class="modal-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fenêtre de connexion (public/js/authView.js) -->
+    <div
+      id="login-modal"
+      class="modal fade"
+      role="dialog"
+      tabindex="-1"
+      aria-labelledby="login-modal-title"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" autocomplete="on">
+          <div class="modal-header">
+            <h2 id="login-modal-title" class="modal-title h5">
+              <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#key-fill" /></svg>
+              <span data-i18n="auth.title">Sign in</span>
+            </h2>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+              data-i18n-aria-label="common.close"
+              hidden
+            ></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-body-secondary small" data-i18n="auth.intro">
+              Enter the access key given by the library owner.
+            </p>
+            <label for="login-key" class="form-label" data-i18n="auth.keyLabel">Access key</label>
+            <input
+              id="login-key"
+              name="key"
+              type="password"
+              class="form-control"
+              autocomplete="current-password"
+              required
+            />
+            <p class="login-error text-danger small mt-2 mb-0" role="alert" hidden></p>
+          </div>
+          <div class="modal-footer">
+            <button type="submit" class="btn btn-primary" data-i18n="auth.submit">Sign in</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Barre de lecture de la preview (public/js/playerBar.js) -->
     <div id="player-bar" class="fixed-bottom bg-body-tertiary border-top shadow-lg" hidden>
+      <!-- Vidéo de la chanson, sans le son, synchronisée sur la preview (public/js/videoPanel.js) -->
+      <div id="video-panel" class="video-panel" hidden>
+        <video preload="metadata" muted playsinline disablepictureinpicture></video>
+      </div>
       <div class="container-fluid py-2 d-flex align-items-center gap-3">
         <img class="player-cover rounded" width="48" height="48" alt="" />
         <div class="flex-grow-1 min-w-0">
@@ -196,6 +583,32 @@
         </button>
         <button
           type="button"
+          class="play-button player-button player-video"
+          data-action="video"
+          aria-pressed="true"
+          hidden
+        >
+          <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#film" /></svg>
+        </button>
+        <!-- Playlists de la chanson en cours (public/js/playlistMenu.js) -->
+        <div class="dropup player-playlists" hidden>
+          <button
+            type="button"
+            class="play-button player-button"
+            data-action="playlists"
+            data-bs-toggle="dropdown"
+            data-bs-auto-close="outside"
+            aria-expanded="false"
+            aria-label="Playlists"
+            data-i18n-aria-label="playlists.title"
+            data-i18n-title="playlists.title"
+          >
+            <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#music-note-list" /></svg>
+          </button>
+          <div class="dropdown-menu dropdown-menu-end playlist-menu p-2"></div>
+        </div>
+        <button
+          type="button"
           class="play-button player-button"
           data-action="stop"
           aria-label="Stop"
@@ -221,7 +634,7 @@
     <!-- biome-ignore lint/a11y/useMediaCaption: extrait musical, pas de dialogue à sous-titrer -->
     <audio id="preview-player" preload="none"></audio>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script type="module" src="/js/main.js"></script>
   </body>
 </html>

@@ -88,7 +88,7 @@ describe('decodeSongBuffer — encodages', () => {
 describe('parseUltrastarTxt — cas dégradés', () => {
   it('gère les fins de ligne Windows (CRLF)', () => {
     const song = parseUltrastarTxt(
-      '#TITLE:A\r\n#ARTIST:B\r\n#MP3:a.mp3\r\n#BPM:100\r\n: 0 1 1 la\r\nE\r\n',
+      '#TITLE:A\r\n#ARTIST:B\r\n#MP3:a.mp3\r\n#YEAR:1990\r\n#LANGUAGE:French\r\n#BPM:100\r\n: 0 1 1 la\r\nE\r\n',
     );
     assert.equal(song.meta.title, 'A');
     assert.equal(song.stats.notes, 1);
@@ -104,7 +104,9 @@ describe('parseUltrastarTxt — cas dégradés', () => {
   });
 
   it('produit des avertissements en anglais avec un code stable', () => {
-    const song = parseUltrastarTxt('#TITLE:A\n#ARTIST:B\n#MP3:a.mp3\n#BPM:x\n: 0 1 1 la\n');
+    const song = parseUltrastarTxt(
+      '#TITLE:A\n#ARTIST:B\n#MP3:a.mp3\n#YEAR:1990\n#LANGUAGE:French\n#BPM:x\n: 0 1 1 la\n',
+    );
     assert.deepEqual(song.warnings, [
       {
         code: 'MISSING_HEADER',
@@ -161,5 +163,60 @@ describe('beatToSeconds', () => {
 
   it('null si le BPM est invalide', () => {
     assert.equal(beatToSeconds(10, 0, 0), null);
+  });
+});
+
+describe('#VIDEOGAP', () => {
+  it('lu en secondes, virgule acceptée, négatif possible', () => {
+    assert.equal(parseUltrastarTxt('#VIDEOGAP:-1,3\nE\n').meta.videoGap, -1.3);
+    assert.equal(parseUltrastarTxt('#VIDEOGAP:0.5\nE\n').meta.videoGap, 0.5);
+    assert.equal(parseUltrastarTxt('#TITLE:x\nE\n').meta.videoGap, null);
+  });
+});
+
+describe('avertissement d’encodage (format 1.1.0 : UTF-8 sans BOM)', () => {
+  const SONG =
+    '#TITLE:Été\n#ARTIST:A\n#MP3:a.mp3\n#YEAR:1990\n#LANGUAGE:French\n#BPM:300\n: 0 1 0 la\nE\n';
+  /** @param {import('../../src/parsers/ultrastarTxt.js').ParsedSong} song */
+  const codes = (song) => song.warnings.map((w) => w.code);
+
+  it('UTF-8 sans BOM : aucun avertissement', () => {
+    assert.deepEqual(codes(parseUltrastarTxt(Buffer.from(SONG, 'utf8'))), []);
+  });
+
+  it('Windows-1252 : ENCODING_NOT_UTF8', () => {
+    const song = parseUltrastarTxt(Buffer.from(SONG, 'latin1'));
+    assert.deepEqual(codes(song), ['ENCODING_NOT_UTF8']);
+    assert.deepEqual(song.warnings[0].params, { encoding: 'windows-1252' });
+  });
+
+  it('UTF-8 avec BOM : ENCODING_UTF8_BOM', () => {
+    const bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(SONG, 'utf8')]);
+    assert.deepEqual(codes(parseUltrastarTxt(bom)), ['ENCODING_UTF8_BOM']);
+  });
+
+  it('texte déjà décodé : pas d’avertissement d’encodage', () => {
+    assert.deepEqual(codes(parseUltrastarTxt(SONG)), []);
+  });
+});
+
+describe('avertissements #YEAR et #LANGUAGE', () => {
+  const BASE = '#TITLE:A\n#ARTIST:B\n#MP3:a.mp3\n#BPM:300\n';
+  /** @param {string} headers */
+  const missing = (headers) =>
+    parseUltrastarTxt(`${BASE}${headers}: 0 1 0 la\nE\n`)
+      .warnings.filter((w) => w.code === 'MISSING_HEADER')
+      .map((w) => w.params?.header);
+
+  it('signalés quand ils manquent', () => {
+    assert.deepEqual(missing(''), ['YEAR', 'LANGUAGE']);
+  });
+
+  it('année invalide ou langue vide : signalées aussi', () => {
+    assert.deepEqual(missing('#YEAR:19xx\n#LANGUAGE: \n'), ['YEAR', 'LANGUAGE']);
+  });
+
+  it('présents et valides : rien', () => {
+    assert.deepEqual(missing('#YEAR:1985\n#LANGUAGE:French\n'), []);
   });
 });

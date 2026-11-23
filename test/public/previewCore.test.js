@@ -4,10 +4,13 @@ import { describe, it } from 'node:test';
 import {
   fadeFactor,
   formatTime,
+  needsVideoResync,
   positionFromPointer,
   previewWindow,
   seekWindow,
   songFraction,
+  videoMimeType,
+  videoTimeFor,
 } from '../../public/js/previewCore.js';
 
 describe('previewWindow', () => {
@@ -75,5 +78,26 @@ describe('positionFromPointer', () => {
     assert.equal(positionFromPointer(50, rect, 240), 0);
     assert.equal(positionFromPointer(900, rect, 240), 240);
     assert.equal(positionFromPointer(200, rect, Number.NaN), 0);
+  });
+});
+
+describe('vidéo', () => {
+  it('position vidéo = musique + #VIDEOGAP (comme UltraStar Deluxe)', () => {
+    assert.equal(videoTimeFor(60, 0), 60);
+    assert.equal(videoTimeFor(60, 0.5), 60.5);
+    assert.equal(videoTimeFor(5, -10), -5, 'gap négatif : la vidéo n’a pas encore commencé');
+  });
+
+  it('recale seulement au-delà de la tolérance', () => {
+    assert.equal(needsVideoResync(60.1, 60), false);
+    assert.equal(needsVideoResync(61, 60), true);
+  });
+
+  it('formats lisibles par un navigateur', () => {
+    assert.equal(videoMimeType('clip.MP4'), 'video/mp4');
+    assert.equal(videoMimeType('clip.webm'), 'video/webm');
+    assert.equal(videoMimeType('clip.avi'), null);
+    assert.equal(videoMimeType('clip.mkv'), null);
+    assert.equal(videoMimeType(null), null);
   });
 });

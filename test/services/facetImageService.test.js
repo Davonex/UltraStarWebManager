@@ -24,6 +24,8 @@ describe('facetImageService', () => {
       '1980.jpg': 'decade-root-only',
       'Alain Souchon.jpg': 'edition',
       'AC-DC.PNG': 'edition-png',
+      'tag/love_song.jpg': 'tag',
+      'tag/disney.jpg': 'tag',
     });
     images = createFacetImages({ dir: covers.root, logger: silentLogger });
     await images.load();
@@ -51,6 +53,15 @@ describe('facetImageService', () => {
     assert.equal(relative(images.resolve('edition', 'ac-dc')), 'AC-DC.PNG');
   });
 
+  it('images des tags : dossier covers/tag, « _ » = espace', () => {
+    assert.deepEqual(images.list().tag.sort(), ['disney', 'love song']);
+    assert.equal(relative(images.resolve('tag', 'Love Song')), 'tag/love_song.jpg');
+    assert.equal(relative(images.resolve('tag', 'DISNEY')), 'tag/disney.jpg');
+    assert.equal(relative(images.resolve('tag', 'LOVE song')), 'tag/love_song.jpg');
+    assert.equal(relative(images.resolve('tag', 'love_song')), 'tag/love_song.jpg');
+    assert.equal(images.resolve('tag', 'love songs'), null);
+  });
+
   it('gère les orthographes d’UltraStar (Finnish → Finish.jpg)', () => {
     assert.equal(relative(images.resolve('language', 'Finnish')), 'Language/Finish.jpg');
   });
@@ -69,7 +80,7 @@ describe('facetImageService', () => {
   it('non configuré : listes vides, aucune image', async () => {
     const none = createFacetImages({ dir: null, logger: silentLogger });
     await none.load();
-    assert.deepEqual(none.list(), { language: [], decade: [], edition: [] });
+    assert.deepEqual(none.list(), { language: [], decade: [], edition: [], tag: [] });
     assert.equal(none.resolve('language', 'French'), null);
   });
 
@@ -79,6 +90,6 @@ describe('facetImageService', () => {
       logger: silentLogger,
     });
     await missing.load();
-    assert.deepEqual(missing.list(), { language: [], decade: [], edition: [] });
+    assert.deepEqual(missing.list(), { language: [], decade: [], edition: [], tag: [] });
   });
 });

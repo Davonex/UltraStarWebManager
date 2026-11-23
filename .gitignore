@@ -11,3 +11,6 @@ Thumbs.db
 # Bibliothèque d'exemple locale (fichiers audio/vidéo soumis au droit d'auteur)
 samplesongs/
 sampleplaylists/
+
+# Sauvegardes datées des fichiers modifiés par l'outil
+backups/

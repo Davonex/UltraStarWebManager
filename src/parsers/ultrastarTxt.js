@@ -17,6 +17,7 @@
  * @property {string | null} cover
  * @property {string | null} background
  * @property {string | null} video
+ * @property {number | null} videoGap  #VIDEOGAP en secondes (peut être négatif).
  * @property {number | null} year
  * @property {number | null} decade       Ex. 1980 pour 1987.
  * @property {string | null} genre
@@ -158,6 +159,7 @@ function buildMeta(h) {
     cover: textOrNull(h.COVER),
     background: textOrNull(h.BACKGROUND),
     video: textOrNull(h.VIDEO),
+    videoGap: parseNumber(h.VIDEOGAP),
     year,
     decade: getDecade(year),
     genre: textOrNull(h.GENRE),
@@ -247,8 +249,21 @@ export function parseUltrastarTxt(input) {
   if (!meta.artist) warnings.push(missing('ARTIST'));
   if (!meta.audio) warnings.push(missing('AUDIO'));
   if (meta.bpm === null) warnings.push(missing('BPM'));
+  // Facultatifs dans le format, mais utiles au catalogue (filtres Langue et Décennie).
+  if (meta.year === null) warnings.push(missing('YEAR'));
+  if (!meta.language?.trim()) warnings.push(missing('LANGUAGE'));
   if (stats.notes === 0) warnings.push(songWarning('NO_NOTES', 'No notes found'));
   if (!stats.hasEnd) warnings.push(songWarning('MISSING_END', 'Missing end line "E"'));
+  // Format 1.1.0 : UTF-8 sans BOM obligatoire.
+  if (encoding === 'windows-1252') {
+    warnings.push(
+      songWarning('ENCODING_NOT_UTF8', 'Encoding is Windows-1252: UTF-8 without BOM expected', {
+        encoding,
+      }),
+    );
+  } else if (encoding === 'utf-8-bom') {
+    warnings.push(songWarning('ENCODING_UTF8_BOM', 'UTF-8 with BOM: UTF-8 without BOM expected'));
+  }
 
   return { meta, headers, stats, encoding, warnings };
 }

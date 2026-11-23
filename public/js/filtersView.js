@@ -28,10 +28,11 @@ const FACET_LABEL_KEYS = Object.freeze({
   genre: 'filters.genre',
   edition: 'filters.edition',
   tag: 'filters.tag',
+  playlist: 'filters.playlist',
 });
 
 /** Facettes dont les tuiles ont une vignette (image ou initiales). */
-const IMAGE_FACETS = new Set(['language', 'decade', 'edition']);
+const IMAGE_FACETS = new Set(['language', 'decade', 'edition', 'tag', 'playlist']);
 /** Un mot court s'affiche en entier dans la vignette (« OTHER »), sinon ses initiales. */
 const SHORT_WORD_LENGTH = 5;
 
@@ -73,14 +74,22 @@ function valueLabel(key, value) {
  * @param {(key: FacetKey) => FacetOption[]} handlers.getFacetOptions
  * @param {(key: FacetKey, value: string) => string | null} handlers.getImageUrl
  *   URL de l'image d'une valeur, ou null s'il n'y en a pas.
+ * @param {(key: FacetKey, value: string) => string[]} [handlers.getMosaicUrls]
+ *   Pochettes d'une mosaïque (playlists) ; liste vide = pas de mosaïque.
  */
-export function createFiltersView({ form, modal }, { onChange, getFacetOptions, getImageUrl }) {
+export function createFiltersView(
+  { form, modal },
+  { onChange, getFacetOptions, getImageUrl, getMosaicUrls = () => [] },
+) {
   /** @param {ParentNode} root @param {string} selector */
   const $ = (root, selector) => /** @type {HTMLElement} */ (root.querySelector(selector));
 
   const search = /** @type {HTMLInputElement} */ (form.elements.namedItem('q'));
-  const sort = /** @type {HTMLSelectElement} */ (form.elements.namedItem('sort'));
+  const sortButton = $(form, '[data-action="sort"]');
+  const sortLabel = $(sortButton, '.sort-label');
+  const sortItems = /** @type {HTMLElement[]} */ ([...form.querySelectorAll('[data-sort]')]);
   const duetChip = $(form, '[data-action="duet"]');
+  const warningsChip = $(form, '[data-action="warnings"]');
   const resetChip = $(form, '[data-action="reset"]');
   const facetChips = /** @type {HTMLElement[]} */ ([...form.querySelectorAll('[data-facet]')]);
 
@@ -108,10 +117,13 @@ export function createFiltersView({ form, modal }, { onChange, getFacetOptions, 
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => emit({ ...criteria, q: search.value }), SEARCH_DEBOUNCE_MS);
   });
-  sort.addEventListener('change', () => {
-    emit({ ...criteria, sort: /** @type {FilterCriteria['sort']} */ (sort.value) });
-  });
+  for (const item of sortItems) {
+    item.addEventListener('click', () => {
+      emit({ ...criteria, sort: /** @type {FilterCriteria['sort']} */ (item.dataset.sort) });
+    });
+  }
   duetChip.addEventListener('click', () => emit({ ...criteria, duet: !criteria.duet }));
+  warningsChip.addEventListener('click', () => emit({ ...criteria, warnings: !criteria.warnings }));
   resetChip.addEventListener('click', () => emit({ ...defaultCriteria(), sort: criteria.sort }));
   for (const chip of facetChips) {
     chip.addEventListener('click', () => {
@@ -124,7 +136,13 @@ export function createFiltersView({ form, modal }, { onChange, getFacetOptions, 
 
   function renderChips() {
     search.value = criteria.q;
-    sort.value = criteria.sort;
+    for (const item of sortItems) {
+      const current = item.dataset.sort === criteria.sort;
+      item.classList.toggle('active', current);
+      if (current) item.setAttribute('aria-current', 'true');
+      else item.removeAttribute('aria-current');
+      if (current) sortLabel.textContent = item.textContent?.trim() ?? '';
+    }
     for (const chip of facetChips) {
       const key = /** @type {FacetKey} */ (chip.dataset.facet);
       const count = criteria[key].length;
@@ -136,9 +154,12 @@ export function createFiltersView({ form, modal }, { onChange, getFacetOptions, 
     }
     duetChip.classList.toggle('active', criteria.duet);
     duetChip.setAttribute('aria-pressed', String(criteria.duet));
+    warningsChip.classList.toggle('active', criteria.warnings);
+    warningsChip.setAttribute('aria-pressed', String(criteria.warnings));
     const active =
       criteria.q.trim() !== '' ||
       criteria.duet ||
+      criteria.warnings ||
       facetChips.some((c) => c.classList.contains('active'));
     resetChip.hidden = !active;
   }
@@ -184,6 +205,23 @@ export function createFiltersView({ form, modal }, { onChange, getFacetOptions, 
     placeholder.className = 'facet-option-thumb facet-option-placeholder';
     placeholder.textContent = placeholderText(key === 'decade' ? value : label);
     placeholder.setAttribute('aria-hidden', 'true');
+
+    // Playlist : mosaïque 2 × 2 des pochettes de ses premières chansons.
+    const covers = getMosaicUrls(key, value);
+    if (covers.length > 0) {
+      const mosaic = document.createElement('span');
+      mosaic.className = `facet-option-thumb facet-option-mosaic is-${covers.length}`;
+      mosaic.setAttribute('aria-hidden', 'true');
+      for (const src of covers) {
+        const img = document.createElement('img');
+        img.alt = '';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.src = src;
+        mosaic.append(img);
+      }
+      return mosaic;
+    }
 
     const url = getImageUrl(key, value);
     if (!url) return placeholder;

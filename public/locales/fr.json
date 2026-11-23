@@ -18,11 +18,11 @@
     "genre": "Genre",
     "language": "Langue",
     "sort": "Trier par",
-    "sortArtist": "Tri : artiste",
-    "sortTitle": "Tri : titre",
-    "sortYearDesc": "Tri : année récente",
-    "sortYearAsc": "Tri : année ancienne",
-    "sortRecent": "Tri : modifiées récemment",
+    "sortArtist": "Artiste",
+    "sortTitle": "Titre",
+    "sortYearDesc": "Année récente",
+    "sortYearAsc": "Année ancienne",
+    "sortRecent": "Modifiées récemment",
     "duetOnly": "Duos",
     "reset": "Réinitialiser",
     "searchIn": "Rechercher dans {facet}…",
@@ -33,7 +33,11 @@
     },
     "noOptions": "Aucune valeur correspondante.",
     "edition": "Édition",
-    "tag": "Tags"
+    "tag": "Tags",
+    "withWarnings": "Avertissements",
+    "videos": "Vidéos",
+    "videosHint": "Lire les vidéos des chansons (sans le son) avec l'extrait",
+    "playlist": "Playlists"
   },
   "songs": {
     "shown": {
@@ -44,7 +48,8 @@
     "unknownTitle": "Titre inconnu",
     "unknownArtist": "Artiste inconnu",
     "coverAlt": "Pochette de {title} par {artist}",
-    "duet": "Duo"
+    "duet": "Duo",
+    "hasVideo": "Vidéo disponible"
   },
   "errors": {
     "ROUTE_NOT_FOUND": "Route API inconnue",
@@ -55,7 +60,35 @@
     "CATALOG_LOADING": "Chargement du catalogue…",
     "SONG_NOT_FOUND": "Chanson introuvable",
     "COVER_NOT_FOUND": "Pochette introuvable",
-    "AUDIO_NOT_FOUND": "Fichier audio introuvable"
+    "AUDIO_NOT_FOUND": "Fichier audio introuvable",
+    "AUTH_REQUIRED": "Veuillez vous connecter",
+    "FORBIDDEN_ROLE": "Votre niveau d'accès ne permet pas cette action",
+    "INVALID_KEY": "Clé d'accès invalide",
+    "TOO_MANY_ATTEMPTS": "Trop de tentatives : réessayez dans 15 minutes",
+    "CROSS_ORIGIN_REQUEST": "Requête refusée : elle ne vient pas de cette application",
+    "HOST_NOT_ALLOWED": "Adresse non autorisée",
+    "CLIENT_HEADER_REQUIRED": "Requête refusée",
+    "UNSUPPORTED_MEDIA_TYPE": "Requête refusée",
+    "INVALID_REQUEST": "Requête invalide",
+    "VIDEO_NOT_FOUND": "Fichier vidéo introuvable",
+    "SONG_CHANGED": "Le fichier de la chanson a été modifié ailleurs depuis son affichage : fermez et rouvrez-la, puis recommencez.",
+    "UNENCODABLE_CHARACTER": "« {character} » ne peut pas être enregistré dans ce fichier (encodage {encoding}).",
+    "HEADER_NOT_EDITABLE": "Ce champ n'est pas modifiable.",
+    "INVALID_VALUE": "Valeur invalide.",
+    "CONVERSION_FAILED": "Échec du contrôle de conversion : le fichier n'a pas été modifié.",
+    "FFMPEG_NOT_AVAILABLE": "ffmpeg introuvable : renseignez FFMPEG_PATH dans .env.",
+    "CONVERSION_BUSY": "Une autre vidéo est en cours de conversion : attendez qu’elle se termine.",
+    "VIDEO_TARGET_EXISTS": "{file} existe déjà dans le dossier de la chanson : rien n’a été modifié.",
+    "VIDEO_ALREADY_H264": "Cette vidéo est déjà en MP4 H.264, 1080p au plus.",
+    "VIDEO_CONVERSION_FAILED": "La conversion vidéo a échoué : rien n’a été modifié.",
+    "VIDEO_IS_AUDIO": "Le fichier vidéo sert aussi de musique (#MP3) : la conversion retirerait la bande son.",
+    "MUSICBRAINZ_UNAVAILABLE": "MusicBrainz est injoignable (connexion internet ?).",
+    "MUSICBRAINZ_BUSY": "MusicBrainz est occupé : réessayez dans un instant.",
+    "MUSICBRAINZ_NOT_FOUND": "Introuvable sur MusicBrainz.",
+    "MUSICBRAINZ_NO_QUERY": "L’artiste et le titre sont nécessaires pour chercher sur MusicBrainz.",
+    "PLAYLIST_NOT_FOUND": "Playlist introuvable.",
+    "PLAYLIST_CHANGED": "La playlist a été modifiée ailleurs : rouvrez le menu et réessayez.",
+    "PLAYLIST_READ_ONLY": "Les playlists ne peuvent pas être modifiées (pas de dossier de sauvegarde)."
   },
   "warnings": {
     "MISSING_HEADER": "En-tête #{header} manquant ou invalide",
@@ -64,7 +97,12 @@
     "UNKNOWN_LINE": "Ligne {line} : ligne non reconnue",
     "NO_NOTES": "Aucune note trouvée",
     "MISSING_END": "Ligne de fin « E » manquante",
-    "MISSING_FILE": "Fichier introuvable ({kind}) : {file}"
+    "MISSING_FILE": "Fichier introuvable ({kind}) : {file}",
+    "ENCODING_NOT_UTF8": "Encodage {encoding} : UTF-8 sans BOM attendu",
+    "ENCODING_UTF8_BOM": "UTF-8 avec BOM : UTF-8 sans BOM attendu",
+    "VIDEO_NOT_H264": "Vidéo {format} : MP4 H.264 recommandé",
+    "VIDEO_IS_AUDIO": "Même fichier pour la musique et la vidéo : {file}",
+    "VIDEO_TOO_LARGE": "Vidéo {width}×{height} : plus grande que 1080p, lourde pour UltraStar (1080p suffit)"
   },
   "player": {
     "playSong": "Écouter un extrait de {title}",
@@ -78,9 +116,187 @@
     "error": "Impossible de lire ce fichier audio",
     "remaining": "{seconds} s restantes",
     "noAudio": "Pas de fichier audio",
-    "position": "{current} / {total}"
+    "position": "{current} / {total}",
+    "showVideo": "Afficher la vidéo",
+    "hideVideo": "Masquer la vidéo"
   },
   "common": {
     "close": "Fermer"
+  },
+  "auth": {
+    "title": "Connexion",
+    "intro": "Saisissez la clé d'accès fournie par le propriétaire de la bibliothèque.",
+    "keyLabel": "Clé d'accès",
+    "submit": "Se connecter",
+    "logout": "Se déconnecter",
+    "localAdmin": "Admin (ce PC)",
+    "localHint": "Accès complet : vous êtes sur le PC qui fait tourner le serveur.",
+    "roleHint": "Connecté : {role}",
+    "roles": {
+      "read": "Lecture",
+      "write": "Écriture",
+      "admin": "Admin"
+    },
+    "publicRead": "Lecture (public)",
+    "publicHint": "Consulter et écouter est ouvert à tous. Connectez-vous avec une clé pour modifier.",
+    "signInHint": "Se connecter pour modifier (clé écriture ou admin)"
+  },
+  "catalog": {
+    "rescan": "Relire les fichiers des chansons",
+    "rescanned": "relu en {seconds} s"
+  },
+  "details": {
+    "title": "Détail de la chanson",
+    "open": "Détail de {title}",
+    "loading": "Chargement…",
+    "error": "Impossible de lire le fichier de cette chanson.",
+    "information": "Informations",
+    "year": "Année",
+    "creator": "Créateur",
+    "singers": "Chanteurs du duo",
+    "timing": "Synchronisation",
+    "preview": "Début de l'extrait",
+    "previewAuto": "Automatique (30 % de la chanson)",
+    "previewFromTag": "#PREVIEWSTART",
+    "previewFromMedley": "début du medley",
+    "medley": "Medley",
+    "files": "Fichiers",
+    "folder": "Dossier",
+    "txtFile": "Fichier chanson",
+    "audio": "Audio",
+    "video": "Vidéo",
+    "cover": "Pochette",
+    "background": "Fond",
+    "missing": "introuvable",
+    "none": "aucun",
+    "coverGuessed": "trouvée par le marqueur [CO]",
+    "videoNotPlayable": "non lisible par un navigateur",
+    "hasVideo": "Vidéo",
+    "stats": "Statistiques",
+    "notes": "Notes",
+    "phrases": "Phrases",
+    "warnings": "Avertissements",
+    "otherHeaders": {
+      "one": "Autre en-tête ({count})",
+      "other": "Autres en-têtes ({count})"
+    },
+    "resolution": "Résolution",
+    "videoFormat": "Format vidéo",
+    "recommended": "recommandé",
+    "fps": "{value} i/s",
+    "oversized": "plus grande que 1080p"
+  },
+  "edit": {
+    "placeholder": "Ajouter… (Entrée)",
+    "remove": "Retirer {value}",
+    "cancel": "Annuler (Échap)",
+    "save": "Enregistrer (Entrée)",
+    "empty": "(vide)",
+    "dblclickHint": "Double-cliquez pour modifier",
+    "editField": "Modifier {field}",
+    "savedField": "{field} enregistré : {before} → {after}. Sauvegarde : {backup}"
+  },
+  "encoding": {
+    "convert": "Convertir en UTF-8",
+    "hint": "Réécrit le fichier en UTF-8 sans BOM : même texte et mêmes fins de ligne, sauvegarde datée avant.",
+    "converted": "Fichier converti de {from} en UTF-8 (sans BOM). Sauvegarde : {backup}"
+  },
+  "bulk": {
+    "title": "Corrections en masse",
+    "intro": "Chaque correction est d'abord simulée : rien n'est écrit avant votre confirmation. Chaque fichier modifié est sauvegardé avant.",
+    "simulate": "Simuler",
+    "simulating": "Simulation…",
+    "selectAll": "Tout sélectionner",
+    "song": "Chanson",
+    "file": "Fichier",
+    "encoding": "Encodage",
+    "progress": "Traitement {done} / {total}…",
+    "summary": "Terminé : {converted} converti(s), {unchanged} inchangé(s), {errors} erreur(s).",
+    "changedSinceSimulation": "modifié depuis la simulation : ignoré (relancez la simulation)",
+    "utf8": {
+      "title": "Convertir en UTF-8 (sans BOM)",
+      "hint": "Réécrit les fichiers enregistrés dans un autre encodage (ou avec un BOM) : même texte, mêmes fins de ligne.",
+      "none": "Tous les fichiers chanson sont déjà en UTF-8 sans BOM.",
+      "found": {
+        "one": "{count} fichier à convertir.",
+        "other": "{count} fichiers à convertir."
+      },
+      "apply": {
+        "one": "Convertir {count} fichier",
+        "other": "Convertir {count} fichiers"
+      },
+      "tab": "Encodage UTF-8"
+    },
+    "size": "Taille",
+    "megabytes": "{value} Mo",
+    "video": {
+      "tab": "Vidéos MP4 H.264",
+      "title": "Convertir les vidéos en MP4 H.264",
+      "hint": "Résolution d’origine conservée, réduite à 1080p si elle est plus grande (jamais agrandie). Les vidéos sont converties l’une après l’autre en tâche de fond : vous pouvez fermer cette fenêtre.",
+      "none": "Toutes les vidéos sont déjà en MP4 H.264.",
+      "found": {
+        "one": "{count} vidéo à convertir ({size}).",
+        "other": "{count} vidéos à convertir ({size})."
+      },
+      "space": "Les originaux sont déplacés dans les sauvegardes : prévoir environ {size} d’espace disque pour les vidéos cochées.",
+      "batchSize": "Taille du lot",
+      "all": "Toutes",
+      "apply": {
+        "one": "Convertir {count} vidéo",
+        "other": "Convertir les {count} prochaines vidéos"
+      },
+      "current": "Vidéo {index}/{total} : {song} · {percent} %",
+      "finishing": "Finalisation…",
+      "stop": "Arrêter après la vidéo en cours",
+      "stopping": "Arrêt après la vidéo en cours…",
+      "summary": "Lot terminé : {converted} convertie(s), {errors} erreur(s).",
+      "stopped": "Lot arrêté : {converted} convertie(s), {errors} erreur(s), {skipped} non traitée(s).",
+      "isAudio": "sert aussi de musique (#MP3) : non convertie"
+    }
+  },
+  "video": {
+    "convert": "Convertir la vidéo en MP4 H.264",
+    "hint": "Résolution d’origine conservée, réduite à 1080p si elle est plus grande (jamais agrandie). Lecture légère pour UltraStar et les navigateurs.",
+    "planNew": "{from} sera converti en {to} ; #VIDEO sera mis à jour et l’original déplacé dans les sauvegardes.",
+    "planReplace": "{from} sera remplacé par sa version H.264 ; l’original sera déplacé dans les sauvegardes.",
+    "duration": "Cela peut prendre quelques minutes.",
+    "start": "Convertir",
+    "cancel": "Annuler",
+    "running": "Conversion… {percent} %",
+    "runningUnknown": "Conversion…",
+    "done": "Vidéo convertie : {file}. Original sauvegardé : {backup}",
+    "unavailable": "ffmpeg introuvable : renseignez FFMPEG_PATH dans .env pour activer la conversion.",
+    "isAudio": "Le fichier vidéo sert aussi de musique (#MP3) : la conversion retirerait la bande son. Non converti : à traiter à la main."
+  },
+  "musicbrainz": {
+    "title": "MusicBrainz",
+    "intro": "Cherchez l’année, la langue et le genre de cette chanson sur MusicBrainz, puis choisissez ce qu’il faut garder.",
+    "searching": "Recherche sur MusicBrainz…",
+    "choose": "Choisissez l’enregistrement qui correspond :",
+    "loading": "Lecture du détail…",
+    "noResult": "Rien trouvé sur MusicBrainz pour cet artiste et ce titre.",
+    "score": "pertinence {score} %",
+    "source": "Source :",
+    "current": "Actuel",
+    "proposed": "MusicBrainz",
+    "nothing": "aucune proposition",
+    "hint": "Les valeurs cochées remplacent les valeurs actuelles. Rien n’est écrit avant « Appliquer ».",
+    "apply": {
+      "one": "Appliquer {count} champ",
+      "other": "Appliquer {count} champs"
+    },
+    "otherResult": "Autre résultat",
+    "cancel": "Annuler",
+    "saved": "Valeurs MusicBrainz enregistrées. Sauvegarde : {backup}",
+    "retry": "Réessayer"
+  },
+  "playlists": {
+    "title": "Playlists",
+    "none": "Aucune playlist dans le dossier des playlists.",
+    "count": {
+      "one": "{count} chanson",
+      "other": "{count} chansons"
+    },
+    "readOnly": "Connectez-vous en écriture pour ajouter ou retirer cette chanson."
   }
 }

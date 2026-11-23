@@ -52,9 +52,15 @@ par git (fichiers protégés par le droit d'auteur) : ne jamais les versionner n
 1. **Ne jamais modifier, déplacer ou supprimer un fichier de la bibliothèque de l'utilisateur**
    (`SONG_DIR`, `PLAYLIST_DIR`) ni de l'installation d'UltraStar (`CATEGORY_COVERS_DIR`) pendant le développement ou les tests. Les tests utilisent
    uniquement `test/fixtures/` ou un dossier temporaire (`fs.mkdtemp`).
-2. Toute écriture de fichier chanson ou playlist dans le code applicatif passe par un utilitaire
-   d'**écriture atomique** (fichier temporaire + `rename`) précédée d'une **sauvegarde `.bak`**,
-   et **conserve l'encodage d'origine**.
+2. Toute écriture de fichier chanson ou playlist passe par `src/services/fileWriter.js` :
+   **sauvegarde datée** dans `BACKUP_DIR` (défaut `backups/`, historique conservé, jamais
+   de `.bak` dans la bibliothèque) puis **écriture atomique** (fichier temporaire + `rename`).
+   L'**encodage d'origine** (UTF-8, UTF-8 BOM, Windows-1252) et les **fins de ligne** sont
+   conservés ; seules les lignes modifiées changent (`src/parsers/ultrastarEdit.js`). Une
+   modification est refusée (409) si le fichier a changé depuis son affichage.
+   Vidéos (`src/services/videoConvertService.js`) : ffmpeg écrit dans un fichier temporaire,
+   le résultat est vérifié, l'original est copié dans `BACKUP_DIR`, puis `rename`. ffmpeg est
+   lancé sans shell (liste d'arguments) ; les tests utilisent `test/helpers/fakeFfmpeg.js`.
 3. Toute opération de modification en masse propose d'abord un **mode simulation (dry-run)**
    renvoyant la liste des changements (diff) avant application.
 4. Tout chemin reçu du navigateur est résolu puis **vérifié comme étant à l'intérieur** de
@@ -63,6 +69,15 @@ par git (fichiers protégés par le droit d'auteur) : ne jamais les versionner n
    Préférer les modules intégrés de Node (`node:fs/promises`, `node:path`, `node:test`…).
 6. Pas de framework frontend (React, Vue, Angular…) ni d'étape de build.
 7. Ne lis pas et n'affiche pas le contenu de `.env`.
+8. **Sécurité des routes** : toute route de l'API déclare son niveau d'accès avec
+   `requireRole('read' | 'write' | 'admin')` dans `src/routes/api.js` (lecture = consulter,
+   écriture = modifier, admin = supprimer). Seules `/api/health` et `/api/auth/*` sont publiques.
+   Les appels du navigateur passent **toujours** par `public/js/api.js` (qui ajoute
+   l'en-tête `X-USM-Request` exigé sur les écritures). Chaque nouvelle route a un test de refus
+   (401 sans connexion, 403 si le niveau est insuffisant).
+9. **CSP stricte** : aucun script ni style en ligne dans le HTML (pas de `<script>…</script>`,
+   pas d'attribut `style=` ni `onclick=`), aucun fichier chargé depuis un autre domaine (CDN).
+   Les styles dynamiques passent par `element.style` ou des classes.
 
 ## Normes de code
 

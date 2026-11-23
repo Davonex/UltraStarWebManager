@@ -19,6 +19,7 @@
   "author": "Didier MATHIEU",
   "license": "MIT",
   "dependencies": {
+    "bootstrap": "^5.3.8",
     "express": "^5.1.0"
   },
   "devDependencies": {

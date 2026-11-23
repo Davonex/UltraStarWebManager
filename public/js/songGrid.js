@@ -12,6 +12,8 @@ const PAGE_SIZE = 96;
 /** Distance avant le bas de page à partir de laquelle on charge la suite. */
 const PRELOAD_MARGIN = '800px';
 const PLACEHOLDER_COVER = '/img/no-cover.svg';
+/** Icône « vidéo » d'UltraStar-Manager (voir public/img/vendor/ultrastar-manager/README.md). */
+const VIDEO_ICON = '/img/vendor/ultrastar-manager/video.png';
 
 /** @typedef {import('./api.js').Song} Song */
 /** @typedef {import('./api.js').SongWarning} SongWarning */
@@ -48,8 +50,9 @@ function badge(text, className, title) {
  * @param {HTMLElement} elements.sentinel   Élément observé en bas de grille.
  * @param {HTMLTemplateElement} elements.template  Modèle d'une carte.
  * @param {(songId: string) => void} elements.onPreview  Clic sur le bouton de lecture.
+ * @param {(songId: string) => void} elements.onInfo     Clic sur le bouton « i ».
  */
-export function createSongGrid({ container, sentinel, template, onPreview }) {
+export function createSongGrid({ container, sentinel, template, onPreview, onInfo }) {
   /** @type {readonly Song[]} */
   let songs = [];
   let rendered = 0;
@@ -74,9 +77,17 @@ export function createSongGrid({ container, sentinel, template, onPreview }) {
   }
 
   container.addEventListener('click', (event) => {
-    const button = /** @type {HTMLElement} */ (event.target).closest('[data-action="preview"]');
+    const button = /** @type {HTMLElement} */ (event.target).closest('[data-action]');
     const card = button?.closest('.song-card');
-    if (card instanceof HTMLElement && card.dataset.songId) onPreview(card.dataset.songId);
+    if (
+      !(button instanceof HTMLElement) ||
+      !(card instanceof HTMLElement) ||
+      !card.dataset.songId
+    ) {
+      return;
+    }
+    if (button.dataset.action === 'preview') onPreview(card.dataset.songId);
+    if (button.dataset.action === 'info') onInfo(card.dataset.songId);
   });
 
   /**
@@ -106,6 +117,21 @@ export function createSongGrid({ container, sentinel, template, onPreview }) {
       { once: true },
     );
     img.src = coverUrl(song) ?? PLACEHOLDER_COVER;
+
+    const infoButton = /** @type {HTMLElement} */ (fragment.querySelector('.song-info'));
+    infoButton.setAttribute('aria-label', t('details.open', { title: title.textContent }));
+    infoButton.title = t('details.title');
+
+    if (song.files.video) {
+      const icon = document.createElement('img');
+      icon.className = 'song-video-icon';
+      icon.src = VIDEO_ICON;
+      icon.alt = t('songs.hasVideo');
+      icon.title = icon.alt;
+      icon.width = 16;
+      icon.height = 16;
+      /** @type {HTMLElement} */ (fragment.querySelector('.song-flags')).append(icon);
+    }
 
     const playButton = /** @type {HTMLButtonElement} */ (fragment.querySelector('.song-play'));
     if (song.files.audio) {

@@ -21,6 +21,7 @@ const song = (overrides) => ({
   id: overrides.title ?? 'x',
   folder: '',
   txtFile: '',
+  video: null,
   title: null,
   artist: null,
   year: null,
@@ -33,6 +34,7 @@ const song = (overrides) => ({
   isDuet: false,
   previewStart: null,
   previewSource: null,
+  videoGap: 0,
   files: { audio: null, cover: null, background: null, video: null },
   warnings: [],
   modifiedAt: 0,
@@ -139,6 +141,25 @@ describe('filterSongs', () => {
       'Zen',
     ]);
     assert.deepEqual(titles(filterSongs(SONGS, criteria({ duet: true }))), ['Idées noires']);
+  });
+});
+
+describe('filtre « avertissements »', () => {
+  it('ne garde que les chansons avec au moins un avertissement', () => {
+    const withWarning = song({
+      title: 'Abîmée',
+      warnings: [{ code: 'MISSING_END', message: 'Missing end line "E"' }],
+    });
+    const list = [...SONGS, withWarning];
+    assert.deepEqual(titles(filterSongs(list, criteria({ warnings: true }))), ['Abîmée']);
+    assert.equal(filterSongs(list, criteria({})).length, list.length);
+    assert.equal(hasActiveFilter(criteria({ warnings: true })), true);
+  });
+
+  it('gardé dans l’URL', () => {
+    const params = criteriaToParams(criteria({ warnings: true }));
+    assert.equal(params.toString(), 'warnings=1');
+    assert.equal(criteriaFromParams(params).warnings, true);
   });
 });
 
@@ -259,5 +280,35 @@ describe('critères ↔ URL', () => {
     assert.equal(hasActiveFilter(criteria({ sort: 'title' })), false);
     assert.equal(hasActiveFilter(criteria({ genre: ['Pop'] })), true);
     assert.equal(hasActiveFilter(criteria({ q: '  ' })), false);
+  });
+});
+
+describe('facette « playlist »', () => {
+  const songs = [
+    song({ title: 'A', playlists: ['Top', 'Soirée'] }),
+    song({ title: 'B', playlists: ['Soirée'] }),
+    song({ title: 'C' }), // pas encore reliée (playlists non chargées) ou dans aucune
+  ];
+
+  it('filtre sur une ou plusieurs playlists (OU entre elles)', () => {
+    const titles = (/** @type {string[]} */ playlist) =>
+      filterSongs(songs, { ...defaultCriteria(), playlist }).map((s) => s.title);
+    assert.deepEqual(titles(['Top']), ['A']);
+    assert.deepEqual(titles(['Top', 'Soirée']), ['A', 'B']);
+    assert.deepEqual(titles([]), ['A', 'B', 'C']);
+  });
+
+  it('options triées par nom, avec le nombre de chansons', () => {
+    assert.deepEqual(
+      facetOptions(songs, defaultCriteria(), 'playlist', 'fr').map((o) => `${o.value}:${o.count}`),
+      ['Soirée:2', 'Top:1'],
+    );
+  });
+
+  it('gardée dans l’URL', () => {
+    const criteria = { ...defaultCriteria(), playlist: ['Top FR 80-90'] };
+    const params = criteriaToParams(criteria);
+    assert.equal(params.toString(), 'playlist=Top+FR+80-90');
+    assert.deepEqual(criteriaFromParams(params).playlist, ['Top FR 80-90']);
   });
 });

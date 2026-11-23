@@ -1,11 +1,12 @@
 // @ts-check
 /**
- * Images des catégories (langues, décennies, éditions) fournies par l'installation
+ * Images des catégories (langues, décennies, éditions, tags) fournies par l'installation
  * d'UltraStar Deluxe, dossier `covers` :
  *
  *   covers/Language/French.jpg   → langue « French »
  *   covers/Decade/1990.jpg       → décennie 1990 (repli : covers/1990.jpg)
  *   covers/ABBA.jpg              → édition « ABBA » (catégorie #EDITION d'UltraStar)
+ *   covers/tag/love_song.jpg     → tag « Love Song » (« _ » = espace)
  *
  * Seuls les noms de fichiers sont lus au démarrage ; ce service ne modifie jamais ce dossier.
  *
@@ -18,7 +19,7 @@ import { looseKey } from '../utils/text.js';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
-/** @typedef {'language' | 'decade' | 'edition'} ImageFacet */
+/** @typedef {'language' | 'decade' | 'edition' | 'tag'} ImageFacet */
 
 /**
  * Sous-dossiers explorés pour chaque facette, par ordre de priorité ('' = racine de covers).
@@ -28,6 +29,7 @@ export const FACET_FOLDERS = Object.freeze({
   language: ['Language'],
   decade: ['Decade', ''],
   edition: [''],
+  tag: ['tag', 'Tags', 'tags', 'Tag'],
 });
 
 const DECADE_NAME = /^\d{4}$/;
@@ -42,7 +44,19 @@ const NAME_FILTERS = Object.freeze({
   language: () => true,
   decade: (name) => DECADE_NAME.test(name),
   edition: () => true,
+  tag: () => true,
 });
+
+/**
+ * Clé de recherche d'une image. Pour les tags, « _ » vaut un espace :
+ * `love_song.jpg` correspond au tag « Love Song ».
+ * @param {ImageFacet} facet
+ * @param {string} text
+ * @returns {string}
+ */
+function imageKey(facet, text) {
+  return looseKey(facet === 'tag' ? text.replace(/_/g, ' ') : text);
+}
 
 /**
  * Orthographes des fichiers d'UltraStar Deluxe différentes du nom anglais habituel.
@@ -96,7 +110,7 @@ export function createFacetImages({ dir, logger = console }) {
    * @returns {string}
    */
   function keyOf(facet, value) {
-    const key = looseKey(value);
+    const key = imageKey(facet, value);
     return facet === 'language' ? (LANGUAGE_ALIASES[key] ?? key) : key;
   }
 
@@ -113,7 +127,7 @@ export function createFacetImages({ dir, logger = console }) {
           for (const folder of FACET_FOLDERS[facet]) {
             for (const image of await listImages(dir, folder)) {
               if (!NAME_FILTERS[facet](image.name)) continue;
-              const key = looseKey(image.name);
+              const key = imageKey(facet, image.name);
               if (!images.has(key)) images.set(key, image); // premier dossier prioritaire
             }
           }
@@ -144,6 +158,8 @@ export function createFacetImages({ dir, logger = console }) {
         language: [...names('language'), ...aliases],
         decade: names('decade'),
         edition: names('edition'),
+        // « love_song » est annoncé « love song » : l'interface compare avec le tag tel qu'écrit.
+        tag: names('tag').map((name) => name.replace(/_/g, ' ')),
       };
     },
 

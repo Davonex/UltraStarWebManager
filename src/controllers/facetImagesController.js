@@ -18,7 +18,7 @@ export function createFacetImagesController(facetImages) {
   return {
     /**
      * GET /api/facet-images — valeurs illustrées par facette.
-     * Réponse : `{ data: { language: string[], decade: string[], edition: string[] } }`
+     * Réponse : `{ data: { language: string[], decade: string[], edition: string[], tag: string[] } }`
      * (listes vides si CATEGORY_COVERS_DIR n'est pas configuré).
      *
      * @param {import('express').Request} _req

@@ -6,7 +6,8 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignoreUnknown": true
+    "ignoreUnknown": true,
+    "includes": ["**", "!public/img/vendor"]
   },
   "formatter": {
     "enabled": true,
@@ -33,7 +34,9 @@
       "suspicious": {
         "noConsole": {
           "level": "warn",
-          "options": { "allow": ["error", "warn", "info"] }
+          "options": {
+            "allow": ["error", "warn", "info"]
+          }
         },
         "noVar": "error"
       }

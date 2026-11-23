@@ -88,3 +88,45 @@ export function positionFromPointer(clientX, rect, duration) {
   if (!(rect.width > 0) || !Number.isFinite(duration)) return 0;
   return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) * duration;
 }
+
+/** Écart toléré entre la vidéo et la musique avant de recaler la vidéo (s). */
+export const VIDEO_SYNC_TOLERANCE_S = 0.3;
+
+/** Formats vidéo lisibles par les navigateurs (les .avi, .mkv, .mpg, .flv ne le sont pas). */
+const VIDEO_MIME_TYPES = Object.freeze({
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  webm: 'video/webm',
+  ogv: 'video/ogg',
+});
+
+/**
+ * Type MIME d'un fichier vidéo lisible par un navigateur, ou null.
+ * @param {string | null} fileName
+ * @returns {string | null}
+ */
+export function videoMimeType(fileName) {
+  const extension = fileName?.split('.').pop()?.toLowerCase() ?? '';
+  return VIDEO_MIME_TYPES[/** @type {keyof typeof VIDEO_MIME_TYPES} */ (extension)] ?? null;
+}
+
+/**
+ * Position dans la vidéo pour une position dans la musique, comme UltraStar Deluxe :
+ * vidéo = musique + #VIDEOGAP (un gap négatif retarde le début de la vidéo).
+ * @param {number} audioTime
+ * @param {number} videoGap
+ * @returns {number}
+ */
+export function videoTimeFor(audioTime, videoGap) {
+  return audioTime + videoGap;
+}
+
+/**
+ * Indique s'il faut recaler la vidéo sur la musique.
+ * @param {number} videoTime
+ * @param {number} target
+ * @returns {boolean}
+ */
+export function needsVideoResync(videoTime, target) {
+  return Math.abs(videoTime - target) > VIDEO_SYNC_TOLERANCE_S;
+}

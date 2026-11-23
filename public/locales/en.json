@@ -18,11 +18,11 @@
     "genre": "Genre",
     "language": "Language",
     "sort": "Sort by",
-    "sortArtist": "Sort: artist",
-    "sortTitle": "Sort: title",
-    "sortYearDesc": "Sort: newest year",
-    "sortYearAsc": "Sort: oldest year",
-    "sortRecent": "Sort: recently modified",
+    "sortArtist": "Artist",
+    "sortTitle": "Title",
+    "sortYearDesc": "Newest year",
+    "sortYearAsc": "Oldest year",
+    "sortRecent": "Recently modified",
     "duetOnly": "Duets",
     "reset": "Reset",
     "searchIn": "Search in {facet}…",
@@ -33,7 +33,11 @@
     },
     "noOptions": "No matching value.",
     "edition": "Edition",
-    "tag": "Tags"
+    "tag": "Tags",
+    "withWarnings": "Warnings",
+    "videos": "Videos",
+    "videosHint": "Play song videos (muted) with the preview",
+    "playlist": "Playlists"
   },
   "songs": {
     "shown": {
@@ -44,7 +48,8 @@
     "unknownTitle": "Unknown title",
     "unknownArtist": "Unknown artist",
     "coverAlt": "Cover of {title} by {artist}",
-    "duet": "Duet"
+    "duet": "Duet",
+    "hasVideo": "Video available"
   },
   "errors": {
     "ROUTE_NOT_FOUND": "Unknown API route",
@@ -55,7 +60,35 @@
     "CATALOG_LOADING": "Song catalog is loading…",
     "SONG_NOT_FOUND": "Song not found",
     "COVER_NOT_FOUND": "Cover not found",
-    "AUDIO_NOT_FOUND": "Audio file not found"
+    "AUDIO_NOT_FOUND": "Audio file not found",
+    "AUTH_REQUIRED": "Please sign in",
+    "FORBIDDEN_ROLE": "Your access level does not allow this action",
+    "INVALID_KEY": "Invalid access key",
+    "TOO_MANY_ATTEMPTS": "Too many attempts: try again in 15 minutes",
+    "CROSS_ORIGIN_REQUEST": "Request refused: it does not come from this application",
+    "HOST_NOT_ALLOWED": "Address not allowed",
+    "CLIENT_HEADER_REQUIRED": "Request refused",
+    "UNSUPPORTED_MEDIA_TYPE": "Request refused",
+    "INVALID_REQUEST": "Invalid request",
+    "VIDEO_NOT_FOUND": "Video file not found",
+    "SONG_CHANGED": "The song file was changed elsewhere since it was displayed: close and reopen it, then try again.",
+    "UNENCODABLE_CHARACTER": "\"{character}\" cannot be saved in this file (encoding {encoding}).",
+    "HEADER_NOT_EDITABLE": "This field cannot be edited.",
+    "INVALID_VALUE": "Invalid value.",
+    "CONVERSION_FAILED": "Conversion check failed: the file was not changed.",
+    "FFMPEG_NOT_AVAILABLE": "ffmpeg not found: set FFMPEG_PATH in .env.",
+    "CONVERSION_BUSY": "Another video is being converted: wait for it to finish.",
+    "VIDEO_TARGET_EXISTS": "{file} already exists in the song folder: nothing was changed.",
+    "VIDEO_ALREADY_H264": "This video is already MP4 H.264, at most 1080p.",
+    "VIDEO_CONVERSION_FAILED": "Video conversion failed: nothing was changed.",
+    "VIDEO_IS_AUDIO": "The video file is also the audio file (#MP3): converting it would remove the music.",
+    "MUSICBRAINZ_UNAVAILABLE": "MusicBrainz cannot be reached (internet connection?).",
+    "MUSICBRAINZ_BUSY": "MusicBrainz is busy: try again in a moment.",
+    "MUSICBRAINZ_NOT_FOUND": "Not found on MusicBrainz.",
+    "MUSICBRAINZ_NO_QUERY": "The artist and title are needed to search MusicBrainz.",
+    "PLAYLIST_NOT_FOUND": "Playlist not found.",
+    "PLAYLIST_CHANGED": "The playlist was changed elsewhere: reopen the menu and try again.",
+    "PLAYLIST_READ_ONLY": "Playlists cannot be changed (no backup folder)."
   },
   "warnings": {
     "MISSING_HEADER": "Missing or invalid #{header} header",
@@ -64,7 +97,12 @@
     "UNKNOWN_LINE": "Line {line}: unrecognized line",
     "NO_NOTES": "No notes found",
     "MISSING_END": "Missing end line \"E\"",
-    "MISSING_FILE": "File not found ({kind}): {file}"
+    "MISSING_FILE": "File not found ({kind}): {file}",
+    "ENCODING_NOT_UTF8": "Encoding {encoding}: UTF-8 without BOM expected",
+    "ENCODING_UTF8_BOM": "UTF-8 with BOM: UTF-8 without BOM expected",
+    "VIDEO_NOT_H264": "Video {format}: MP4 H.264 recommended",
+    "VIDEO_IS_AUDIO": "Same file for the music and the video: {file}",
+    "VIDEO_TOO_LARGE": "Video {width}×{height}: larger than 1080p, heavy for UltraStar (1080p is enough)"
   },
   "player": {
     "playSong": "Play preview of {title}",
@@ -78,9 +116,187 @@
     "error": "Cannot play this audio file",
     "remaining": "{seconds} s left",
     "noAudio": "No audio file",
-    "position": "{current} / {total}"
+    "position": "{current} / {total}",
+    "showVideo": "Show video",
+    "hideVideo": "Hide video"
   },
   "common": {
     "close": "Close"
+  },
+  "auth": {
+    "title": "Sign in",
+    "intro": "Enter the access key given by the library owner.",
+    "keyLabel": "Access key",
+    "submit": "Sign in",
+    "logout": "Sign out",
+    "localAdmin": "Admin (this PC)",
+    "localHint": "Full access: you are on the PC running the server.",
+    "roleHint": "Signed in: {role}",
+    "roles": {
+      "read": "Read",
+      "write": "Write",
+      "admin": "Admin"
+    },
+    "publicRead": "Read (public)",
+    "publicHint": "Browsing and listening are open to everyone. Sign in with a key to edit.",
+    "signInHint": "Sign in to edit (write or admin key)"
+  },
+  "catalog": {
+    "rescan": "Re-read the song files",
+    "rescanned": "re-read in {seconds} s"
+  },
+  "details": {
+    "title": "Song details",
+    "open": "Details of {title}",
+    "loading": "Loading…",
+    "error": "Could not read this song file.",
+    "information": "Information",
+    "year": "Year",
+    "creator": "Creator",
+    "singers": "Duet singers",
+    "timing": "Timing",
+    "preview": "Preview start",
+    "previewAuto": "Automatic (30% of the song)",
+    "previewFromTag": "#PREVIEWSTART",
+    "previewFromMedley": "start of the medley",
+    "medley": "Medley",
+    "files": "Files",
+    "folder": "Folder",
+    "txtFile": "Song file",
+    "audio": "Audio",
+    "video": "Video",
+    "cover": "Cover",
+    "background": "Background",
+    "missing": "missing",
+    "none": "none",
+    "coverGuessed": "found by the [CO] marker",
+    "videoNotPlayable": "not playable in a browser",
+    "hasVideo": "Video",
+    "stats": "Statistics",
+    "notes": "Notes",
+    "phrases": "Phrases",
+    "warnings": "Warnings",
+    "otherHeaders": {
+      "one": "Other header ({count})",
+      "other": "Other headers ({count})"
+    },
+    "resolution": "Resolution",
+    "videoFormat": "Video format",
+    "recommended": "recommended",
+    "fps": "{value} fps",
+    "oversized": "larger than 1080p"
+  },
+  "edit": {
+    "placeholder": "Add… (Enter)",
+    "remove": "Remove {value}",
+    "cancel": "Cancel (Esc)",
+    "save": "Save (Enter)",
+    "empty": "(empty)",
+    "dblclickHint": "Double-click to edit",
+    "editField": "Edit {field}",
+    "savedField": "{field} saved: {before} → {after}. Backup: {backup}"
+  },
+  "encoding": {
+    "convert": "Convert to UTF-8",
+    "hint": "Rewrites the file in UTF-8 without BOM: same text and line endings, dated backup first.",
+    "converted": "File converted from {from} to UTF-8 (without BOM). Backup: {backup}"
+  },
+  "bulk": {
+    "title": "Bulk corrections",
+    "intro": "Each correction is simulated first: nothing is written until you confirm. Every changed file is backed up first.",
+    "simulate": "Simulate",
+    "simulating": "Simulating…",
+    "selectAll": "Select all",
+    "song": "Song",
+    "file": "File",
+    "encoding": "Encoding",
+    "progress": "Processing {done} / {total}…",
+    "summary": "Done: {converted} converted, {unchanged} unchanged, {errors} error(s).",
+    "changedSinceSimulation": "changed since the simulation: skipped (simulate again)",
+    "utf8": {
+      "title": "Convert to UTF-8 (without BOM)",
+      "hint": "Rewrites files saved in another encoding (or with a BOM): same text and line endings.",
+      "none": "All song files are already in UTF-8 without BOM.",
+      "found": {
+        "one": "{count} file to convert.",
+        "other": "{count} files to convert."
+      },
+      "apply": {
+        "one": "Convert {count} file",
+        "other": "Convert {count} files"
+      },
+      "tab": "UTF-8 encoding"
+    },
+    "size": "Size",
+    "megabytes": "{value} MB",
+    "video": {
+      "tab": "MP4 H.264 videos",
+      "title": "Convert videos to MP4 H.264",
+      "hint": "Original resolution kept, reduced to 1080p if larger (never enlarged). Videos are converted one after the other in the background: you can close this window.",
+      "none": "All videos are already MP4 H.264.",
+      "found": {
+        "one": "{count} video to convert ({size}).",
+        "other": "{count} videos to convert ({size})."
+      },
+      "space": "The originals are moved to the backups: plan about {size} of free disk space for the selected videos.",
+      "batchSize": "Batch size",
+      "all": "All",
+      "apply": {
+        "one": "Convert the next {count} video",
+        "other": "Convert the next {count} videos"
+      },
+      "current": "Video {index}/{total}: {song} · {percent} %",
+      "finishing": "Finishing…",
+      "stop": "Stop after the current video",
+      "stopping": "Stopping after the current video…",
+      "summary": "Batch finished: {converted} converted, {errors} error(s).",
+      "stopped": "Batch stopped: {converted} converted, {errors} error(s), {skipped} not processed.",
+      "isAudio": "also the audio file (#MP3): not converted"
+    }
+  },
+  "video": {
+    "convert": "Convert video to MP4 H.264",
+    "hint": "Original resolution kept, reduced to 1080p if larger (never enlarged). Light to play for UltraStar and browsers.",
+    "planNew": "{from} will be converted to {to}; #VIDEO will be updated and the original moved to the backups.",
+    "planReplace": "{from} will be replaced by its H.264 version; the original will be moved to the backups.",
+    "duration": "This can take a few minutes.",
+    "start": "Convert",
+    "cancel": "Cancel",
+    "running": "Converting… {percent} %",
+    "runningUnknown": "Converting…",
+    "done": "Video converted: {file}. Original saved in the backups: {backup}",
+    "unavailable": "ffmpeg not found: set FFMPEG_PATH in .env to enable conversion.",
+    "isAudio": "The video file is also the song’s audio (#MP3): converting it would remove the music. Not converted: handle it manually."
+  },
+  "musicbrainz": {
+    "title": "MusicBrainz",
+    "intro": "Look up the year, language and genre of this song on MusicBrainz, then choose what to keep.",
+    "searching": "Searching MusicBrainz…",
+    "choose": "Choose the matching recording:",
+    "loading": "Reading the details…",
+    "noResult": "Nothing found on MusicBrainz for this artist and title.",
+    "score": "match {score} %",
+    "source": "Source:",
+    "current": "Current",
+    "proposed": "MusicBrainz",
+    "nothing": "nothing proposed",
+    "hint": "Ticked values replace the current ones. Nothing is written until you apply.",
+    "apply": {
+      "one": "Apply {count} field",
+      "other": "Apply {count} fields"
+    },
+    "otherResult": "Other result",
+    "cancel": "Cancel",
+    "saved": "MusicBrainz values saved. Backup: {backup}",
+    "retry": "Try again"
+  },
+  "playlists": {
+    "title": "Playlists",
+    "none": "No playlist in the playlist folder.",
+    "count": {
+      "one": "{count} song",
+      "other": "{count} songs"
+    },
+    "readOnly": "Sign in with write access to add or remove this song."
   }
 }
