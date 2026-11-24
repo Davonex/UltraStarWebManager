@@ -1,9 +1,14 @@
 // @ts-check
 import assert from 'node:assert/strict';
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import { backupFile, fileTimestamp, writeFileAtomic } from '../../src/services/fileWriter.js';
+import {
+  backupFile,
+  fileTimestamp,
+  replaceFile,
+  writeFileAtomic,
+} from '../../src/services/fileWriter.js';
 import { createSongLibrary } from '../helpers/songLibrary.js';
 
 describe('fileWriter', () => {
@@ -59,5 +64,43 @@ describe('fileWriter', () => {
     await writeFileAtomic(file, Buffer.from('nouveau'));
     assert.equal(await readFile(file, 'utf8'), 'nouveau');
     assert.deepEqual(await readdir(path.dirname(file)), ['chanson.txt']);
+  });
+
+  /** Erreur Windows « fichier verrouillé ». */
+  const eperm = () => Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+
+  it('remplace un fichier ouvert par un lecteur (Windows) : ancien fichier écarté puis supprimé', async () => {
+    const folder = path.join(dir.root, 'lib', 'Artiste - Titre');
+    const target = path.join(folder, 'clip.mp4');
+    const source = path.join(folder, '.clip.converting.mp4');
+    await writeFile(target, 'ancienne');
+    await writeFile(source, 'nouvelle');
+    // Simule Windows : on ne peut pas écraser `target` tant qu'il est ouvert, mais on peut le renommer.
+    /** @param {string} from @param {string} to */
+    const renameFn = async (from, to) => {
+      if (to === target && from === source && (await readdir(folder)).includes('clip.mp4')) {
+        throw eperm();
+      }
+      await rename(from, to);
+    };
+    await replaceFile(source, target, { attempts: 1, renameFn });
+    assert.equal(await readFile(target, 'utf8'), 'nouvelle');
+    assert.deepEqual((await readdir(folder)).sort(), ['chanson.txt', 'clip.mp4']);
+  });
+
+  it('verrou complet : erreur, original et nouveau fichier intacts', async () => {
+    const folder = path.join(dir.root, 'lib', 'Artiste - Titre');
+    const target = path.join(folder, 'clip.mp4');
+    const source = path.join(folder, '.clip.converting.mp4');
+    await writeFile(target, 'ancienne');
+    await writeFile(source, 'nouvelle');
+    /** @param {string} from @param {string} to */
+    const renameFn = async (from, to) => {
+      if (from === target || to === target) throw eperm();
+      await rename(from, to);
+    };
+    await assert.rejects(replaceFile(source, target, { attempts: 1, renameFn }), /EPERM/);
+    assert.equal(await readFile(target, 'utf8'), 'ancienne');
+    assert.equal(await readFile(source, 'utf8'), 'nouvelle');
   });
 });

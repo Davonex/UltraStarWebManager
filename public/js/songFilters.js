@@ -13,7 +13,7 @@
 
 /** @typedef {'artist' | 'title' | 'year-desc' | 'year-asc' | 'recent'} SortKey */
 
-/** @typedef {'language' | 'decade' | 'genre' | 'edition' | 'tag' | 'playlist'} FacetKey */
+/** @typedef {'language' | 'decade' | 'genre' | 'edition' | 'tag' | 'playlist' | 'warning'} FacetKey */
 
 /**
  * @typedef {object} FilterCriteria
@@ -25,7 +25,7 @@
  * @property {string[]} tag        #TAGS
  * @property {string[]} playlist   Playlists .upl (noms)
  * @property {boolean} duet        Uniquement les duos.
- * @property {boolean} warnings    Uniquement les chansons avec avertissements.
+ * @property {string[]} warning   Types d'avertissement (« * » = au moins un avertissement).
  * @property {SortKey} sort
  */
 
@@ -45,6 +45,7 @@ export const FACET_KEYS = Object.freeze([
   'edition',
   'tag',
   'playlist',
+  'warning',
 ]);
 
 /** @type {readonly SortKey[]} */
@@ -61,7 +62,7 @@ export function defaultCriteria() {
     tag: [],
     playlist: [],
     duet: false,
-    warnings: false,
+    warning: [],
     sort: 'artist',
   };
 }
@@ -85,6 +86,42 @@ export function normalizeText(text) {
     .trim();
 }
 
+/** Valeur de la facette « warning » qui retient toute chanson ayant un avertissement. */
+export const ANY_WARNING = '*';
+/** Avertissements dont le type précise un paramètre (« MISSING_HEADER:YEAR »…). */
+const WARNING_TYPE_PARAMS = Object.freeze({
+  MISSING_HEADER: 'header',
+  DUPLICATE_HEADER: 'header',
+  MISSING_FILE: 'kind',
+});
+
+/** Type unique regroupant tous les avertissements de nommage (NAMING_FOLDER, NAMING_TXT…). */
+export const NAMING_WARNING = 'NAMING';
+
+/**
+ * Type d'un avertissement, pour le filtre : son code, précisé pour certains
+ * (« MISSING_HEADER:YEAR », « MISSING_FILE:video »). Les avertissements de nommage
+ * sont regroupés dans une seule catégorie « NAMING ».
+ * @param {import('./api.js').SongWarning} warning
+ * @returns {string}
+ */
+export function warningType(warning) {
+  if (warning.code.startsWith('NAMING_')) return NAMING_WARNING;
+  const param = /** @type {Record<string, string>} */ (WARNING_TYPE_PARAMS)[warning.code];
+  const value = param ? warning.params?.[param] : undefined;
+  return value === undefined ? warning.code : `${warning.code}:${value}`;
+}
+
+/**
+ * Types d'avertissement d'une chanson, plus « * » si elle en a au moins un.
+ * @param {Song} song
+ * @returns {string[]}
+ */
+function warningTypes(song) {
+  if (song.warnings.length === 0) return [];
+  return [ANY_WARNING, ...new Set(song.warnings.map(warningType))];
+}
+
 /**
  * Valeurs d'une chanson pour une facette.
  * @param {Song} song
@@ -103,6 +140,8 @@ export function facetValues(song, key) {
       return song.tags;
     case 'playlist':
       return song.playlists ?? []; // ajouté par main.js à partir de GET /api/playlists
+    case 'warning':
+      return warningTypes(song);
     case 'decade':
       return song.decade === null ? [] : [String(song.decade)];
     default:
@@ -136,7 +175,6 @@ export function matchesCriteria(song, criteria, ignoredFacet = null) {
     if (!words.every((word) => haystack.includes(word))) return false;
   }
   if (criteria.duet && !song.isDuet) return false;
-  if (criteria.warnings && song.warnings.length === 0) return false;
   return FACET_KEYS.every((key) => key === ignoredFacet || matchesFacet(song, key, criteria[key]));
 }
 
@@ -265,7 +303,14 @@ export function criteriaFromParams(params) {
   criteria.tag = list('tag');
   criteria.playlist = list('playlist');
   criteria.duet = params.get('duet') === '1';
-  criteria.warnings = params.get('warnings') === '1';
+  // Anciens liens « warning=NAMING_COVER »… : catégorie « NAMING » regroupée.
+  criteria.warning = [
+    ...new Set(list('warning').map((v) => (v.startsWith('NAMING_') ? NAMING_WARNING : v))),
+  ];
+  // Ancien lien « ?warnings=1 » : toutes les chansons avec avertissement.
+  if (params.get('warnings') === '1' && criteria.warning.length === 0) {
+    criteria.warning = [ANY_WARNING];
+  }
   if (SORT_KEYS.includes(sort)) criteria.sort = sort;
   return criteria;
 }
@@ -282,7 +327,6 @@ export function criteriaToParams(criteria) {
     for (const value of criteria[key]) params.append(key, value);
   }
   if (criteria.duet) params.set('duet', '1');
-  if (criteria.warnings) params.set('warnings', '1');
   if (criteria.sort !== 'artist') params.set('sort', criteria.sort);
   return params;
 }
@@ -294,9 +338,6 @@ export function criteriaToParams(criteria) {
  */
 export function hasActiveFilter(criteria) {
   return (
-    criteria.q.trim() !== '' ||
-    criteria.duet ||
-    criteria.warnings ||
-    FACET_KEYS.some((key) => criteria[key].length > 0)
+    criteria.q.trim() !== '' || criteria.duet || FACET_KEYS.some((key) => criteria[key].length > 0)
   );
 }

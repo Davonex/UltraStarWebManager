@@ -116,6 +116,39 @@ export function buildExtractAudioArgs(input, output) {
 }
 
 /**
+ * Arguments de la mesure ReplayGain : décodage de la piste audio, aucun fichier écrit.
+ * @param {string} input
+ * @returns {string[]}
+ */
+export function buildReplayGainArgs(input) {
+  return [
+    '-hide_banner',
+    '-nostdin',
+    '-i',
+    input,
+    '-map',
+    '0:a:0',
+    '-af',
+    'replaygain',
+    '-f',
+    'null',
+    '-',
+  ];
+}
+
+/**
+ * Lit « track_gain = -2.54 dB » et « track_peak = 0.853360 » dans la sortie de ffmpeg.
+ * @param {string} text
+ * @returns {{ trackGain: number, trackPeak: number } | null}
+ */
+export function parseReplayGainOutput(text) {
+  const gain = /track_gain = ([+-]?\d+(?:\.\d+)?) dB/.exec(text);
+  const peak = /track_peak = (\d+(?:\.\d+)?)/.exec(text);
+  if (!gain || !peak) return null;
+  return { trackGain: Number(gain[1]), trackPeak: Number(peak[1]) };
+}
+
+/**
  * Dernière position (s) annoncée dans la sortie « -progress » de ffmpeg (null si aucune).
  * @param {string} text
  * @returns {number | null}
@@ -160,7 +193,7 @@ export function parseProbeOutput(json) {
 /** Erreur de ffmpeg (programme absent, conversion échouée…). */
 export class FfmpegError extends Error {
   /**
-   * @param {'FFMPEG_NOT_AVAILABLE' | 'VIDEO_CONVERSION_FAILED' | 'AUDIO_EXTRACTION_FAILED'} code
+   * @param {'FFMPEG_NOT_AVAILABLE' | 'VIDEO_CONVERSION_FAILED' | 'AUDIO_EXTRACTION_FAILED' | 'REPLAYGAIN_FAILED'} code
    * @param {string} message
    */
   constructor(code, message) {
@@ -186,8 +219,9 @@ export function createFfmpeg({ ffmpegPath, logger = console }) {
    * @param {object} options
    * @param {string} options.input  Pour le journal.
    * @param {(seconds: number) => void} [options.onProgress]
-   * @param {'VIDEO_CONVERSION_FAILED' | 'AUDIO_EXTRACTION_FAILED'} options.failure  Code d'erreur.
-   * @returns {Promise<void>}
+   * @param {'VIDEO_CONVERSION_FAILED' | 'AUDIO_EXTRACTION_FAILED' | 'REPLAYGAIN_FAILED'} options.failure
+   *   Code d'erreur.
+   * @returns {Promise<string>}  Fin de la sortie d'erreur de ffmpeg (où il écrit ses mesures).
    */
   function run(args, { input, onProgress, failure }) {
     return new Promise((resolve, reject) => {
@@ -211,7 +245,7 @@ export function createFfmpeg({ ffmpegPath, logger = console }) {
       );
       child.on('close', (code) => {
         if (code === 0) {
-          resolve();
+          resolve(stderr);
           return;
         }
         logger.warn(
@@ -269,12 +303,13 @@ export function createFfmpeg({ ffmpegPath, logger = console }) {
      * @param {(seconds: number) => void} [job.onProgress]  Position atteinte (s).
      * @returns {Promise<void>}
      */
-    convertToH264: ({ input, output, onProgress }) =>
-      run(buildConvertArgs(input, output), {
+    convertToH264: async ({ input, output, onProgress }) => {
+      await run(buildConvertArgs(input, output), {
         input,
         onProgress,
         failure: 'VIDEO_CONVERSION_FAILED',
-      }),
+      });
+    },
 
     /**
      * Extrait la piste audio en MP3 (voir buildExtractAudioArgs).
@@ -283,8 +318,25 @@ export function createFfmpeg({ ffmpegPath, logger = console }) {
      * @param {string} job.output
      * @returns {Promise<void>}
      */
-    extractAudioToMp3: ({ input, output }) =>
-      run(buildExtractAudioArgs(input, output), { input, failure: 'AUDIO_EXTRACTION_FAILED' }),
+    extractAudioToMp3: async ({ input, output }) => {
+      await run(buildExtractAudioArgs(input, output), {
+        input,
+        failure: 'AUDIO_EXTRACTION_FAILED',
+      });
+    },
+
+    /**
+     * Mesure le ReplayGain d'un fichier audio (filtre « replaygain », référence 89 dB comme
+     * MP3Gain). Le fichier n'est que lu.
+     * @param {string} input
+     * @returns {Promise<{ trackGain: number, trackPeak: number }>}
+     */
+    async analyzeReplayGain(input) {
+      const output = await run(buildReplayGainArgs(input), { input, failure: 'REPLAYGAIN_FAILED' });
+      const result = parseReplayGainOutput(output);
+      if (!result) throw new FfmpegError('REPLAYGAIN_FAILED', 'ffmpeg gave no ReplayGain values');
+      return result;
+    },
   };
 }
 

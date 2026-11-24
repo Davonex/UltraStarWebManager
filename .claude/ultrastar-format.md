@@ -161,3 +161,15 @@ cible** avant de proposer une migration de format.
 Hors spécification usdx.eu. Fichier texte ; ligne `#NAME:` (nom de la playlist), puis une ligne
 par chanson au format `Artiste : Titre`. **À confirmer sur les vrais fichiers de l'utilisateur**
 avant d'écrire le parser (ajouter des fixtures réelles dans `test/fixtures/`).
+
+## Nommage des dossiers et fichiers (vérifié par `src/parsers/naming.js`)
+
+La spec 1.1.0 ne fixe que : audio « should have the same name as the folder », pochette
+« should end with `[CO]` », fond `[BG]`, et « please add » `[VOC]` / `[INSTR]`. Rien pour le
+dossier, le `.txt` ni les duos. Convention retenue par le projet (communauté, Karedi) :
+`Artiste - Titre` partout, `.txt` d'un duo `Artiste - Titre [DUET].txt`, audio/vidéo sans suffixe,
+`[CO]`, `[BG]`, `[VOC]`, `[INSTR]`. Comparaison souple : casse, accents, espaces ; caractère
+interdit par Windows retiré ou remplacé (`-`, `_`, espace) ; marque de duo en fin de titre ignorée
+pour le dossier et les médias. Avertissements `NAMING_FOLDER`, `NAMING_TXT`, `NAMING_AUDIO`,
+`NAMING_VIDEO`, `NAMING_COVER`, `NAMING_BACKGROUND`, `NAMING_VOCALS`, `NAMING_INSTRUMENTAL`
+(paramètres `file`, `expected`).

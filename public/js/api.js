@@ -36,6 +36,7 @@
  *   modifiedAt: number | null } | null} video  Format et date de la vidéo (null sans vidéo).
  * @property {number} videoGap   #VIDEOGAP en secondes.
  * @property {SongWarning[]} warnings
+ * @property {ReplayGain | null} [replayGain]  Tags ReplayGain du fichier audio (MP3).
  * @property {string[]} [playlists]  Noms des playlists qui la contiennent (ajouté par main.js).
  * @property {number} modifiedAt
  */
@@ -191,6 +192,17 @@ export function facetImageUrl(facet, value) {
  *   medleyEnd: number | null, start: number | null, end: number | null }} timing
  * @property {{ p1: string | null, p2: string | null }} singers
  * @property {VideoDetails | null} video  null sans vidéo.
+ * @property {ReplayGain | null} replayGain  Tags ReplayGain du fichier audio (null si absents).
+ * @property {boolean} ffmpeg  ffmpeg disponible (conversions, MP3, ReplayGain).
+ */
+
+/**
+ * @typedef {object} ReplayGain
+ * @property {number | null} trackGain  dB
+ * @property {number | null} trackPeak  1 = 0 dBFS
+ * @property {number | null} albumGain
+ * @property {number | null} albumPeak
+ * @property {'id3' | 'ape'} source
  */
 
 /**
@@ -306,6 +318,16 @@ export const extractSongAudio = (id, body) =>
   postJson(`/songs/${encodeURIComponent(id)}/extract-audio`, body);
 
 /**
+ * ReplayGain d'une chanson (niveau écriture) : mesure avec ffmpeg (`{ dryRun: true }`, rien
+ * n'est écrit), puis écriture des valeurs dans le tag ID3 du MP3.
+ * @param {string} id
+ * @param {{ dryRun: true } | { trackGain: number, trackPeak: number, expectedAudioModifiedAt: number }} body
+ * @returns {Promise<{ data: any }>}
+ */
+export const songReplayGain = (id, body) =>
+  postJson(`/songs/${encodeURIComponent(id)}/replaygain`, body);
+
+/**
  * État de la dernière conversion vidéo d'une chanson (niveau écriture).
  * @param {string} id
  * @returns {Promise<{ data: { job: VideoJob | null } }>}
@@ -392,6 +414,82 @@ export function getMusicBrainzSuggestion(id, candidate) {
     `/songs/${encodeURIComponent(id)}/musicbrainz/${encodeURIComponent(candidate.id)}${query}`,
   );
 }
+
+/**
+ * @typedef {'folder' | 'txt' | 'duet' | 'audio' | 'video' | 'cover' | 'background' | 'vocals' | 'instrumental'} NamingKind
+ * @typedef {{ naming: Record<NamingKind, { enabled: boolean, pattern: string }> }} Settings
+ */
+
+/** @returns {Promise<{ data: Settings, meta: { defaults: Settings } }>} Préférences. */
+export const getSettings = () => getJson('/settings');
+
+/**
+ * Enregistre les préférences (niveau admin) ; la bibliothèque est relue.
+ * @param {Settings} settings
+ * @returns {Promise<{ data: Settings }>}
+ */
+export const saveSettings = (settings) =>
+  requestJson('/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+
+/**
+ * @typedef {'EMPTY' | 'FORBIDDEN_CHARACTER' | 'TRAILING_DOT_OR_SPACE' | 'RESERVED_NAME'
+ *   | 'TOO_LONG' | 'EXTENSION_CHANGED' | 'DUPLICATE' | 'EXISTS'} RenameError
+ *
+ * @typedef {object} RenameEntry Dossier ou fichier du plan de renommage.
+ * @property {NamingKind | 'folder' | 'other'} kind
+ * @property {string} from
+ * @property {string} proposed
+ * @property {string} to
+ * @property {'unchanged' | 'rename'} action
+ * @property {RenameError | null} error
+ * @property {string[]} usedBy
+ *
+ * @typedef {object} RenamePlan
+ * @property {string} songFolder
+ * @property {string | null} artist
+ * @property {string | null} title
+ * @property {RenameEntry | null} folder
+ * @property {RenameEntry[]} files
+ * @property {{ txtFile: string, newTxtFile: string,
+ *   changes: { header: string, before: string | null, after: string | null }[] }[]} txts
+ * @property {{ txtFile: string, character: string, encoding: string }[]} unencodable
+ * @property {number} renameCount
+ * @property {number} errorCount
+ * @property {{ listing: string, txts: Record<string, number> }} expected
+ *
+ * @typedef {{ folder?: string, files?: Record<string, string> }} RenameOverrides
+ */
+
+/**
+ * Simulation du renommage du dossier d'une chanson (niveau écriture).
+ * @param {string} id
+ * @param {RenameOverrides} [overrides]  Noms saisis.
+ * @returns {Promise<{ data: RenamePlan }>}
+ */
+export const previewRename = (id, overrides = {}) =>
+  postJson(`/songs/${encodeURIComponent(id)}/rename`, { dryRun: true, overrides });
+
+/**
+ * Applique le renommage simulé.
+ * @param {string} id
+ * @param {RenameOverrides} overrides
+ * @param {RenamePlan['expected']} expected  État vu lors de la simulation.
+ * @returns {Promise<{ data: { songId: string | null, journal: string | null, renamed: number,
+ *   backups: string[] } }>}
+ */
+export const applyRename = (id, overrides, expected) =>
+  postJson(`/songs/${encodeURIComponent(id)}/rename`, { overrides, expected });
+
+/**
+ * Annule un renommage.
+ * @param {string} journal
+ * @returns {Promise<{ data: { songIds: string[] } }>}
+ */
+export const undoRename = (journal) => postJson(`/renames/${encodeURIComponent(journal)}/undo`, {});
 
 /**
  * Relit tous les fichiers .txt de la bibliothèque (niveau écriture).

@@ -14,3 +14,6 @@ sampleplaylists/
 
 # Sauvegardes datées des fichiers modifiés par l'outil
 backups/
+
+# Préférences enregistrées depuis l'interface (normes de nommage…)
+settings.json

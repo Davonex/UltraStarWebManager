@@ -16,12 +16,16 @@ import {
   extractSongAudio,
   getSongDetails,
   getVideoJob,
+  songReplayGain,
   updateSongHeaders,
 } from './api.js';
 import { createChipsInput } from './chipsInput.js';
 import { getLanguage, t } from './i18n.js';
 import { createMusicBrainzDialog } from './musicBrainzPanel.js';
 import { formatTime, videoMimeType } from './previewCore.js';
+import { createRenameDialog } from './renameDialog.js';
+import { warningType } from './songFilters.js';
+import { warningIcon } from './warningIcons.js';
 
 const ICONS = '/img/vendor/bootstrap-icons/icons.svg';
 const PLACEHOLDER_COVER = '/img/no-cover.svg';
@@ -59,7 +63,7 @@ const SHOWN_HEADERS = new Set([
 ]);
 
 /** @typedef {import('./api.js').Song} Song */
-/** @typedef {'EDITION' | 'TAGS' | 'CREATOR'} EditableHeader */
+/** @typedef {'EDITION' | 'TAGS' | 'CREATOR' | 'LANGUAGE' | 'GENRE' | 'YEAR' | 'P1' | 'P2'} EditableHeader */
 
 /** Avertissements corrigeables par une conversion en UTF-8. */
 const ENCODING_WARNINGS = new Set(['ENCODING_NOT_UTF8', 'ENCODING_UTF8_BOM']);
@@ -91,7 +95,14 @@ const EDIT_LABELS = Object.freeze({
   EDITION: 'filters.edition',
   TAGS: 'filters.tag',
   CREATOR: 'details.creator',
+  LANGUAGE: 'filters.language',
+  GENRE: 'filters.genre',
+  YEAR: 'details.year',
+  P1: 'details.singer1',
+  P2: 'details.singer2',
 });
+/** Champs à une seule valeur : saisie simple au lieu des pastilles. */
+const SINGLE_VALUE_FIELDS = new Set(['YEAR', 'P1', 'P2']);
 /** @typedef {import('./api.js').SongDetails} SongDetails */
 
 /**
@@ -147,16 +158,20 @@ function time(seconds) {
  * @param {object} elements
  * @param {HTMLElement} elements.modal
  * @param {HTMLElement} [elements.musicBrainzModal]  Fenêtre MusicBrainz (niveau écriture).
+ * @param {HTMLElement} [elements.renameModal]  Fenêtre de renommage (niveau écriture).
  * @param {object} handlers
  * @param {(facet: 'language' | 'decade' | 'edition' | 'tag', value: string) => string | null} handlers.getImageUrl
  * @param {(song: Song) => void} handlers.onPlay
  * @param {() => boolean} handlers.canEdit  L'utilisateur a-t-il le niveau écriture ?
  * @param {(header: EditableHeader) => string[]} handlers.getSuggestions  Valeurs existantes.
  * @param {(song: Song) => void} handlers.onSongUpdated  Après un enregistrement.
+ * @param {() => void} handlers.onBeforeApply  Avant un renommage : arrêter la lecture.
+ * @param {(songId: string) => Promise<Song | null>} handlers.onRenamed  Après un renommage :
+ *   recharge le catalogue et renvoie la chanson (nouvel identifiant), ou null.
  */
 export function createSongDetailsView(
-  { modal, musicBrainzModal },
-  { getImageUrl, onPlay, canEdit, getSuggestions, onSongUpdated },
+  { modal, musicBrainzModal, renameModal },
+  { getImageUrl, onPlay, canEdit, getSuggestions, onSongUpdated, onBeforeApply, onRenamed },
 ) {
   /** @param {string} selector */
   const $ = (selector) => /** @type {HTMLElement} */ (modal.querySelector(selector));
@@ -181,6 +196,8 @@ export function createSongDetailsView(
   let pendingValues = null;
   /** Message affiché en haut de la fenêtre. @type {{ kind: 'success' | 'danger' | 'info', text: string } | null} */
   let message = null;
+  /** Dernier message affiché (pour ne le faire défiler à l'écran qu'une fois). */
+  let shownMessage = /** @type {typeof message} */ (null);
   let busy = false;
   /** Conversion vidéo proposée (confirmation affichée), ou null. */
   /** @type {{ from: string, to: string, replaces: boolean } | null} */
@@ -193,6 +210,9 @@ export function createSongDetailsView(
   /** Création du MP3 proposée (confirmation affichée), ou null. */
   /** @type {{ from: string, to: string, reuse: boolean } | null} */
   let audioPlan = null;
+  /** ReplayGain mesuré, en attente de confirmation. */
+  /** @type {{ trackGain: number, trackPeak: number, audioModifiedAt: number } | null} */
+  let gainMeasure = null;
 
   /**
    * Fenêtre MusicBrainz (YEAR / GENRE / LANGUAGE) : la fenêtre info se ferme le temps du
@@ -213,6 +233,34 @@ export function createSongDetailsView(
         },
       })
     : null;
+
+  /**
+   * Fenêtre « Renommer selon la norme » : la fenêtre info se ferme le temps du renommage,
+   * puis se rouvre sur la chanson (dont l'identifiant change avec son chemin).
+   */
+  const renamer = renameModal
+    ? createRenameDialog({
+        modal: renameModal,
+        onBeforeApply,
+        onClosed({ song, songId, changed }) {
+          if (!changed) {
+            openDetails(song);
+            return;
+          }
+          onRenamed(songId).then((renamed) => {
+            if (renamed) openDetails(renamed, { kind: 'success', text: t('rename.reopened') });
+          });
+        },
+      })
+    : null;
+
+  /** Ferme la fenêtre info puis ouvre la fenêtre de renommage. */
+  function openRename() {
+    const song = current;
+    if (!song || !renamer) return;
+    modal.addEventListener('hidden.bs.modal', () => renamer.open(song), { once: true });
+    bootstrapModal.hide();
+  }
 
   /** Ferme la fenêtre info puis ouvre la fenêtre MusicBrainz. */
   function openMusicBrainz() {
@@ -352,6 +400,36 @@ export function createSongDetailsView(
   const headerLabel = (header) => t(EDIT_LABELS[/** @type {EditableHeader} */ (header)] ?? header);
 
   /** Bouton « Convertir en UTF-8 », placé sous l'avertissement d'encodage. */
+  /**
+   * Avertissement de nommage regroupé : détail de chaque nom, puis bouton de renommage.
+   * @param {import('./api.js').SongWarning[]} warnings
+   */
+  function namingItem(warnings) {
+    const item = el('li');
+    item.append(
+      icon(warningIcon('NAMING'), 'bi details-warning-icon'),
+      el('span', '', t('details.namingTitle')),
+    );
+    const sub = el('ul', 'details-naming small text-body-secondary');
+    for (const warning of warnings) {
+      const key = `warnings.${warning.code}`;
+      const text = t(key, warning.params);
+      sub.append(el('li', 'text-break', text === key ? warning.message : text));
+    }
+    item.append(sub);
+    if (canEdit() && renamer) {
+      const action = /** @type {HTMLButtonElement} */ (
+        el('button', 'btn btn-sm btn-outline-warning mb-2')
+      );
+      action.type = 'button';
+      action.disabled = busy;
+      action.append(icon('input-cursor-text', 'bi me-1'), t('rename.open'));
+      action.addEventListener('click', openRename);
+      item.append(action);
+    }
+    return item;
+  }
+
   function convertButton() {
     const wrap = el('div', 'mt-1 mb-2');
     const action = /** @type {HTMLButtonElement} */ (
@@ -391,6 +469,23 @@ export function createSongDetailsView(
     renderBody();
   }
 
+  /**
+   * Bouton « Renommer » à droite du titre « Fichiers » (niveau écriture) : toujours présent,
+   * pour renommer à la main même des fichiers déjà conformes.
+   */
+  function renameButton() {
+    if (!renamer || !canEdit()) return undefined;
+    const action = /** @type {HTMLButtonElement} */ (
+      el('button', 'btn btn-sm btn-outline-primary details-heading-action')
+    );
+    action.type = 'button';
+    action.disabled = busy;
+    action.title = t('rename.title');
+    action.append(icon('input-cursor-text', 'bi me-1'), t('rename.short'));
+    action.addEventListener('click', openRename);
+    return action;
+  }
+
   /** Bouton « MusicBrainz » à droite du titre « Informations » (niveau écriture). */
   function musicBrainzButton() {
     if (!musicBrainz || !canEdit()) return undefined;
@@ -402,6 +497,97 @@ export function createSongDetailsView(
     action.append(icon('search', 'bi me-1'), t('musicbrainz.title'));
     action.addEventListener('click', openMusicBrainz);
     return action;
+  }
+
+  // --- ReplayGain : mesure puis écriture dans le tag ID3 -------------------------------
+
+  /** Bloc sous l'avertissement REPLAYGAIN_MISSING. */
+  function replayGainBlock() {
+    const wrap = el('div', 'mt-1 mb-2');
+    if (!details?.ffmpeg) {
+      wrap.append(el('small', 'd-block text-body-secondary', t('video.unavailable')));
+      return wrap;
+    }
+    /** @param {string} label @param {string} className @param {() => void} onClick @param {string} [iconName] */
+    const action = (label, className, onClick, iconName) => {
+      const node = /** @type {HTMLButtonElement} */ (el('button', `btn btn-sm ${className}`));
+      node.type = 'button';
+      node.disabled = busy;
+      if (busy && iconName) node.append(el('span', 'spinner-border spinner-border-sm me-1'));
+      else if (iconName) node.append(icon(iconName, 'bi me-1'));
+      node.append(label);
+      node.addEventListener('click', onClick);
+      return node;
+    };
+    if (gainMeasure) {
+      wrap.append(
+        el(
+          'small',
+          'd-block mb-1',
+          t('replayGain.measured', {
+            gain: `${gainMeasure.trackGain > 0 ? '+' : ''}${number(gainMeasure.trackGain)} dB`,
+            peak: number(gainMeasure.trackPeak, 3),
+          }),
+        ),
+        action(t('replayGain.write'), 'btn-warning me-2', writeReplayGain, 'check2'),
+        action(t('video.cancel'), 'btn-outline-secondary', () => {
+          gainMeasure = null;
+          renderBody();
+        }),
+      );
+      return wrap;
+    }
+    wrap.append(
+      action(
+        t(busy ? 'replayGain.measuring' : 'replayGain.measure'),
+        'btn-outline-warning',
+        measureReplayGain,
+        'speedometer2',
+      ),
+      el('small', 'd-block text-body-secondary mt-1', t('replayGain.hint')),
+    );
+    return wrap;
+  }
+
+  /** 1. Mesure (ffmpeg décode le morceau : quelques secondes). */
+  async function measureReplayGain() {
+    if (!current || busy) return;
+    busy = true;
+    renderBody();
+    try {
+      gainMeasure = (await songReplayGain(current.id, { dryRun: true })).data;
+      message = null;
+    } catch (error) {
+      message = { kind: 'danger', text: errorText(error) };
+    } finally {
+      busy = false;
+    }
+    renderBody();
+  }
+
+  /** 2. Écriture dans le tag ID3 du MP3. */
+  async function writeReplayGain() {
+    if (!current || busy || !gainMeasure) return;
+    busy = true;
+    renderBody();
+    try {
+      const { data } = await songReplayGain(current.id, {
+        trackGain: gainMeasure.trackGain,
+        trackPeak: gainMeasure.trackPeak,
+        expectedAudioModifiedAt: gainMeasure.audioModifiedAt,
+      });
+      current = data.song;
+      onSongUpdated(data.song);
+      message = { kind: 'success', text: t('replayGain.written', { backup: data.backup }) };
+      gainMeasure = null;
+      details = (await getSongDetails(data.song.id)).data.details;
+    } catch (error) {
+      message = { kind: 'danger', text: errorText(error) };
+    } finally {
+      busy = false;
+    }
+    renderHeader();
+    renderBody();
   }
 
   // --- Création du MP3 (vidéo qui sert aussi de musique) -----------------------------
@@ -704,9 +890,26 @@ export function createSongDetailsView(
    * @returns {string[]}
    */
   function valuesOf(song, header) {
-    if (header === 'EDITION') return song.editions;
-    if (header === 'TAGS') return song.tags;
-    return song.creators;
+    /** @param {string | null | undefined} value */
+    const one = (value) => (value ? [value] : []);
+    switch (header) {
+      case 'EDITION':
+        return song.editions;
+      case 'TAGS':
+        return song.tags;
+      case 'LANGUAGE':
+        return song.languages;
+      case 'GENRE':
+        return song.genres;
+      case 'YEAR':
+        return one(song.year === null ? null : String(song.year));
+      case 'P1':
+        return one(details?.singers.p1);
+      case 'P2':
+        return one(details?.singers.p2);
+      default:
+        return song.creators;
+    }
   }
 
   /**
@@ -767,13 +970,15 @@ export function createSongDetailsView(
     if (!current) return;
     wrap.classList.add('is-editing');
     const field = el('div', 'details-inline-field');
-    const input = createChipsInput(field, {
-      values: pendingValues ?? valuesOf(current, header),
-      suggestions: getSuggestions(header),
-      label: headerLabel(header),
-      onEnterEmpty: () => saveEdit(header, input.getValues()),
-      onEscape: cancelEdit,
-    });
+    const input = SINGLE_VALUE_FIELDS.has(header)
+      ? createSingleInput(field, header)
+      : createChipsInput(field, {
+          values: pendingValues ?? valuesOf(current, header),
+          suggestions: getSuggestions(header),
+          label: headerLabel(header),
+          onEnterEmpty: () => saveEdit(header, input.getValues()),
+          onEscape: cancelEdit,
+        });
     const actions = el('div', 'details-inline-actions');
     const save = /** @type {HTMLButtonElement} */ (el('button', 'btn btn-sm btn-success'));
     save.type = 'button';
@@ -794,6 +999,44 @@ export function createSongDetailsView(
     actions.append(save, cancel);
     wrap.append(field, actions);
     queueMicrotask(() => input.focus());
+  }
+
+  /**
+   * Saisie simple (année, nom d'un chanteur) : Entrée = enregistrer, Échap = annuler.
+   * Même interface que les pastilles (getValues, focus).
+   * @param {HTMLElement} field
+   * @param {EditableHeader} header
+   */
+  function createSingleInput(field, header) {
+    const input = /** @type {HTMLInputElement} */ (el('input', 'form-control form-control-sm'));
+    input.type = 'text';
+    input.value = (pendingValues ?? valuesOf(/** @type {Song} */ (current), header))[0] ?? '';
+    input.setAttribute('aria-label', headerLabel(header));
+    if (header === 'YEAR') {
+      input.inputMode = 'numeric';
+      input.maxLength = 4;
+      input.pattern = '\\d{4}';
+      input.placeholder = t('edit.yearPlaceholder');
+    }
+    const getValues = () => (input.value.trim() ? [input.value.trim()] : []);
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        saveEdit(header, getValues());
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelEdit();
+      }
+    });
+    field.append(input);
+    return {
+      getValues,
+      focus: () => {
+        input.focus();
+        input.select();
+      },
+    };
   }
 
   /**
@@ -845,6 +1088,38 @@ export function createSongDetailsView(
   }
 
   /**
+   * « Piste −10,27 dB · crête 1,208 · Album … » (tags ReplayGain du fichier audio).
+   * @param {import('./api.js').ReplayGain | null | undefined} gain
+   * @returns {Node | string}
+   */
+  function replayGainText(gain) {
+    if (!gain) return el('span', 'text-body-secondary', t('details.replayGainNone'));
+    /** @param {number | null} value */
+    const db = (value) => (value === null ? null : `${value > 0 ? '+' : ''}${number(value)} dB`);
+    /** @param {number | null} gainValue @param {number | null} peak @param {string} label */
+    const part = (gainValue, peak, label) =>
+      gainValue === null && peak === null
+        ? null
+        : [
+            `${label} ${db(gainValue) ?? '—'}`,
+            peak === null ? null : t('details.replayGainPeak', { value: number(peak, 3) }),
+          ]
+            .filter(Boolean)
+            .join(' · ');
+    const text = [
+      part(gain.trackGain, gain.trackPeak, t('details.replayGainTrack')),
+      part(gain.albumGain, gain.albumPeak, t('details.replayGainAlbum')),
+    ]
+      .filter(Boolean)
+      .join(' — ');
+    const wrap = el('span', '', text);
+    wrap.append(
+      el('small', 'text-body-secondary', ` (${gain.source === 'ape' ? 'APEv2' : 'ID3'})`),
+    );
+    return wrap;
+  }
+
+  /**
    * Lignes « Format vidéo » et « Résolution » de la section Fichiers.
    * @param {import('./api.js').VideoDetails | null | undefined} video
    * @returns {[string, string, Node | string][]}
@@ -892,23 +1167,26 @@ export function createSongDetailsView(
 
     /** @type {[string, string, Node | string][]} */
     const infoRows = [
-      ['globe2', t('filters.language'), chips('language', song.languages)],
+      [
+        'globe2',
+        t('filters.language'),
+        editableValue('LANGUAGE', chips('language', song.languages)),
+      ],
       [
         'collection',
         t('filters.edition'),
         editableValue('EDITION', chips('edition', song.editions)),
       ],
-      ['music-note-beamed', t('filters.genre'), chips(null, song.genres)],
+      ['music-note-beamed', t('filters.genre'), editableValue('GENRE', chips(null, song.genres))],
       ['tags', t('filters.tag'), editableValue('TAGS', chips('tag', song.tags))],
-      ['calendar3', t('details.year'), song.year ? String(song.year) : '—'],
+      ['calendar3', t('details.year'), editableValue('YEAR', song.year ? String(song.year) : '—')],
       ['pencil-square', t('details.creator'), editableValue('CREATOR', chips(null, song.creators))],
     ];
     if (song.isDuet) {
-      infoRows.push([
-        'people-fill',
-        t('details.singers'),
-        `${singers.p1 ?? '?'} / ${singers.p2 ?? '?'}`,
-      ]);
+      infoRows.push(
+        ['person-fill', t('details.singer1'), editableValue('P1', singers.p1 ?? '—')],
+        ['person-fill', t('details.singer2'), editableValue('P2', singers.p2 ?? '—')],
+      );
     }
     sections.push(section('info-lg', t('details.information'), infoRows, musicBrainzButton()));
 
@@ -941,35 +1219,45 @@ export function createSongDetailsView(
         ? t('details.videoNotPlayable')
         : undefined;
     sections.push(
-      section('folder2-open', t('details.files'), [
-        ['folder2-open', t('details.folder'), song.folder || '.'],
+      section(
+        'folder2-open',
+        t('details.files'),
         [
-          'file-earmark-text',
-          t('details.txtFile'),
-          `${song.txtFile} · ${details.encoding}${headers.VERSION ? ` · v${headers.VERSION}` : ''}`,
+          ['folder2-open', t('details.folder'), song.folder || '.'],
+          [
+            'file-earmark-text',
+            t('details.txtFile'),
+            `${song.txtFile} · ${details.encoding}${headers.VERSION ? ` · v${headers.VERSION}` : ''}`,
+          ],
+          [
+            'file-earmark-music',
+            t('details.audio'),
+            fileState(song.files.audio, headers.AUDIO ?? headers.MP3),
+          ],
+          ...(song.files.audio
+            ? /** @type {[string, string, Node | string][]} */ ([
+                ['speedometer2', 'ReplayGain', replayGainText(details.replayGain)],
+              ])
+            : []),
+          ['film', t('details.video'), fileState(song.files.video, headers.VIDEO, videoNote)],
+          ...videoRows(details.video),
+          [
+            'image',
+            t('details.cover'),
+            fileState(
+              song.files.cover,
+              headers.COVER,
+              song.coverGuessed ? t('details.coverGuessed') : undefined,
+            ),
+          ],
+          [
+            'card-image',
+            t('details.background'),
+            fileState(song.files.background, headers.BACKGROUND),
+          ],
         ],
-        [
-          'file-earmark-music',
-          t('details.audio'),
-          fileState(song.files.audio, headers.AUDIO ?? headers.MP3),
-        ],
-        ['film', t('details.video'), fileState(song.files.video, headers.VIDEO, videoNote)],
-        ...videoRows(details.video),
-        [
-          'image',
-          t('details.cover'),
-          fileState(
-            song.files.cover,
-            headers.COVER,
-            song.coverGuessed ? t('details.coverGuessed') : undefined,
-          ),
-        ],
-        [
-          'card-image',
-          t('details.background'),
-          fileState(song.files.background, headers.BACKGROUND),
-        ],
-      ]),
+        renameButton(),
+      ),
     );
 
     sections.push(
@@ -986,13 +1274,26 @@ export function createSongDetailsView(
       const list = el('ul', 'details-warnings');
       // Le bloc de conversion vidéo va sous le premier avertissement vidéo (format ou taille).
       const videoWarning = song.warnings.find((w) => VIDEO_WARNINGS.has(w.code));
+      // Nommage : un seul avertissement regroupant dossier, .txt, médias…
+      const naming = song.warnings.filter((w) => w.code.startsWith('NAMING_'));
       for (const warning of song.warnings) {
+        if (warning === naming[0]) {
+          list.append(namingItem(naming));
+          continue;
+        }
+        if (naming.includes(warning)) continue;
         const key = `warnings.${warning.code}`;
         const text = t(key, warning.params);
-        const item = el('li', '', text === key ? warning.message : text);
+        const item = el('li');
+        // Icône du type, la même que dans le filtre « Avertissements »
+        item.append(
+          icon(warningIcon(warningType(warning)), 'bi details-warning-icon'),
+          el('span', '', text === key ? warning.message : text),
+        );
         if (ENCODING_WARNINGS.has(warning.code) && canEdit()) item.append(convertButton());
         if (warning === videoWarning && canEdit()) item.append(videoBlock());
         if (warning.code === 'VIDEO_IS_AUDIO' && canEdit()) item.append(audioBlock());
+        if (warning.code === 'REPLAYGAIN_MISSING' && canEdit()) item.append(replayGainBlock());
         list.append(item);
       }
       block.append(h, list);
@@ -1022,6 +1323,10 @@ export function createSongDetailsView(
     const notice = messageBlock();
     // Panneau MusicBrainz juste après « Informations » (les champs qu'il complète).
     body.replaceChildren(...(notice ? [notice] : []), ...sections);
+    // Nouveau message (réussite ou erreur d'une action) : on le montre, même si l'utilisateur
+    // était en bas de la fenêtre, sur l'avertissement qu'il corrigeait.
+    if (notice && message !== shownMessage) notice.scrollIntoView({ block: 'nearest' });
+    shownMessage = message;
     // Le bouton cliqué a pu disparaître avec le re-rendu : on garde le focus dans la fenêtre,
     // sinon Échap ne la fermerait plus.
     if (modal.classList.contains('show') && !modal.contains(document.activeElement)) modal.focus();
@@ -1041,6 +1346,7 @@ export function createSongDetailsView(
     message = notice;
     videoPlan = null;
     audioPlan = null;
+    gainMeasure = null;
     renderHeader();
     renderBody();
     bootstrapModal.show();
@@ -1082,6 +1388,7 @@ export function createSongDetailsView(
     /** Retraduit la fenêtre ouverte après un changement de langue. */
     refresh() {
       musicBrainz?.refresh();
+      renamer?.refresh();
       renderHeader();
       renderBody();
     },

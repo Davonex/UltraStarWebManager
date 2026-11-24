@@ -14,6 +14,9 @@ import { createFacetImagesController } from '../controllers/facetImagesControlle
 import { getHealth } from '../controllers/healthController.js';
 import { createMusicBrainzController } from '../controllers/musicBrainzController.js';
 import { createPlaylistsController } from '../controllers/playlistsController.js';
+import { createRenameController } from '../controllers/renameController.js';
+import { createReplayGainController } from '../controllers/replayGainController.js';
+import { createSettingsController } from '../controllers/settingsController.js';
 import { createSongsController } from '../controllers/songsController.js';
 import { createVideoController } from '../controllers/videoController.js';
 import { requireRole } from '../middlewares/auth.js';
@@ -27,6 +30,9 @@ import { requireRole } from '../middlewares/auth.js';
  * @param {import('../services/videoConvertService.js').VideoConverter} deps.videos
  * @param {import('../services/playlistService.js').Playlists} deps.playlists
  * @param {import('../services/musicBrainzService.js').MusicBrainz} deps.musicBrainz
+ * @param {import('../services/replayGainService.js').ReplayGainTool} deps.replayGain
+ * @param {import('../services/settingsService.js').SettingsStore} deps.settings
+ * @param {import('../services/renameService.js').Renamer} deps.renamer
  * @returns {import('express').Router}
  */
 export function createApiRouter({
@@ -37,6 +43,9 @@ export function createApiRouter({
   videos,
   playlists,
   musicBrainz,
+  replayGain,
+  settings,
+  renamer,
 }) {
   const router = Router();
   const songs = createSongsController(catalog, editor, videos);
@@ -45,6 +54,9 @@ export function createApiRouter({
   const images = createFacetImagesController(facetImages);
   const playlistsCtl = createPlaylistsController(catalog, playlists);
   const mb = createMusicBrainzController(catalog, musicBrainz);
+  const gain = createReplayGainController(catalog, replayGain);
+  const preferences = createSettingsController(catalog, settings);
+  const renames = createRenameController(catalog, renamer);
   const session = createAuthController(auth);
   const read = requireRole('read');
 
@@ -63,6 +75,7 @@ export function createApiRouter({
   router.get('/facet-images', read, images.listImages);
   router.get('/facet-images/:facet/:value', read, images.getImage);
   router.get('/playlists', read, playlistsCtl.listPlaylists);
+  router.get('/settings', read, preferences.get);
 
   // Écriture
   const write = requireRole('write');
@@ -75,6 +88,9 @@ export function createApiRouter({
   router.delete('/playlists/:file/songs', write, playlistsCtl.removeSong);
   router.get('/songs/:id/convert-video', write, video.getJob);
   router.post('/songs/:id/extract-audio', write, video.extractAudio);
+  router.post('/songs/:id/replaygain', write, gain.replayGain);
+  router.post('/songs/:id/rename', write, renames.rename);
+  router.post('/renames/:journal/undo', write, renames.undo);
   // MusicBrainz (YEAR, GENRE, LANGUAGE) : recherche, puis valeurs proposées ; écriture par PATCH /headers
   router.get('/songs/:id/musicbrainz', write, mb.search);
   router.get('/songs/:id/musicbrainz/:recordingId', write, mb.suggest);
@@ -84,6 +100,9 @@ export function createApiRouter({
   router.post('/bulk/convert-video', write, bulk.convertVideos);
   router.get('/bulk/convert-video', write, bulk.getVideoBatch);
   router.post('/bulk/convert-video/stop', write, bulk.stopVideoBatch);
+
+  // Administration : préférences communes à tous (modèles de nommage…)
+  router.put('/settings', requireRole('admin'), preferences.update);
 
   return router;
 }

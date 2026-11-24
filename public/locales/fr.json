@@ -37,7 +37,8 @@
     "withWarnings": "Avertissements",
     "videos": "Vidéos",
     "videosHint": "Lire les vidéos des chansons (sans le son) avec l'extrait",
-    "playlist": "Playlists"
+    "playlist": "Playlists",
+    "allWarnings": "Tous les avertissements"
   },
   "songs": {
     "shown": {
@@ -90,7 +91,17 @@
     "PLAYLIST_CHANGED": "La playlist a été modifiée ailleurs : rouvrez le menu et réessayez.",
     "PLAYLIST_READ_ONLY": "Les playlists ne peuvent pas être modifiées (pas de dossier de sauvegarde).",
     "AUDIO_NOT_SHARED": "La musique est déjà un fichier à part.",
-    "AUDIO_EXTRACTION_FAILED": "Le MP3 n’a pas pu être créé : rien n’a été modifié."
+    "AUDIO_EXTRACTION_FAILED": "Le MP3 n’a pas pu être créé : rien n’a été modifié.",
+    "REPLAYGAIN_FAILED": "Le ReplayGain n’a pas pu être mesuré.",
+    "REPLAYGAIN_NOT_MP3": "Le ReplayGain ne peut être écrit que dans un MP3.",
+    "REPLAYGAIN_TAG_UNSUPPORTED": "Ce MP3 a un tag ID3 qui ne peut pas être modifié sans risque : rien n’a été écrit.",
+    "FILE_LOCKED": "Le fichier est utilisé par un autre programme ou en lecture seule (lecteur, UltraStar, synchronisation, antivirus…) : rien n’a été modifié. Fermez-le et réessayez.",
+    "INVALID_SETTINGS": "Préférences invalides.",
+    "FOLDER_CHANGED": "Le dossier a changé depuis la simulation : la liste a été recalculée, vérifiez-la puis recommencez.",
+    "RENAME_CONFLICT": "Certains noms ne sont pas valides.",
+    "RENAME_TARGET_EXISTS": "« {file} » existe déjà : rien n’a été modifié.",
+    "RENAME_NOT_FOUND": "Renommage introuvable.",
+    "RENAME_ALREADY_UNDONE": "Ce renommage a déjà été annulé."
   },
   "warnings": {
     "MISSING_HEADER": "En-tête #{header} manquant ou invalide",
@@ -104,7 +115,16 @@
     "ENCODING_UTF8_BOM": "UTF-8 avec BOM : UTF-8 sans BOM attendu",
     "VIDEO_NOT_H264": "Vidéo {format} : MP4 H.264 recommandé",
     "VIDEO_IS_AUDIO": "Même fichier pour la musique et la vidéo : {file}",
-    "VIDEO_TOO_LARGE": "Vidéo {width}×{height} : plus grande que 1080p, lourde pour UltraStar (1080p suffit)"
+    "VIDEO_TOO_LARGE": "Vidéo {width}×{height} : plus grande que 1080p, lourde pour UltraStar (1080p suffit)",
+    "REPLAYGAIN_MISSING": "Pas de ReplayGain dans {file}",
+    "NAMING_FOLDER": "Nom du dossier : « {expected} » attendu",
+    "NAMING_TXT": "Nom du fichier chanson : {file} → {expected}",
+    "NAMING_AUDIO": "Nom du fichier audio : {file} → {expected}",
+    "NAMING_VIDEO": "Nom du fichier vidéo : {file} → {expected}",
+    "NAMING_COVER": "Nom de la pochette : {file} → {expected}",
+    "NAMING_BACKGROUND": "Nom du fond : {file} → {expected}",
+    "NAMING_VOCALS": "Nom du fichier voix : {file} → {expected}",
+    "NAMING_INSTRUMENTAL": "Nom du fichier instrumental : {file} → {expected}"
   },
   "player": {
     "playSong": "Écouter un extrait de {title}",
@@ -186,7 +206,14 @@
     "videoFormat": "Format vidéo",
     "recommended": "recommandé",
     "fps": "{value} i/s",
-    "oversized": "plus grande que 1080p"
+    "oversized": "plus grande que 1080p",
+    "replayGainNone": "absent",
+    "replayGainTrack": "Piste",
+    "replayGainAlbum": "Album",
+    "replayGainPeak": "crête {value}",
+    "singer1": "Chanteur 1 (P1)",
+    "singer2": "Chanteur 2 (P2)",
+    "namingTitle": "Nommage non conforme"
   },
   "edit": {
     "placeholder": "Ajouter… (Entrée)",
@@ -196,7 +223,8 @@
     "empty": "(vide)",
     "dblclickHint": "Double-cliquez pour modifier",
     "editField": "Modifier {field}",
-    "savedField": "{field} enregistré : {before} → {after}. Sauvegarde : {backup}"
+    "savedField": "{field} enregistré : {before} → {after}. Sauvegarde : {backup}",
+    "yearPlaceholder": "AAAA"
   },
   "encoding": {
     "convert": "Convertir en UTF-8",
@@ -309,5 +337,122 @@
     "done": "MP3 créé : {file} ({headers} mis à jour). Sauvegarde : {backup}",
     "planReuse": "{to} existe déjà (créé pour une autre version de cette chanson) : #AUDIO / #MP3 pointera dessus.",
     "doneReuse": "La musique pointe maintenant sur {file} existant ({headers} mis à jour). Sauvegarde : {backup}"
+  },
+  "replayGain": {
+    "measure": "Calculer le ReplayGain",
+    "measuring": "Analyse du morceau…",
+    "hint": "ffmpeg mesure le morceau (référence 89 dB, comme MP3Gain) ; vous confirmez avant toute écriture. Seul le tag ID3 change, pas le son.",
+    "measured": "Mesure : gain de piste {gain}, crête {peak}.",
+    "write": "Écrire dans le MP3",
+    "written": "ReplayGain écrit dans le MP3 (tag ID3). Sauvegarde : {backup}"
+  },
+  "warningTypes": {
+    "MISSING_HEADER": "En-tête #{header} manquant ou invalide",
+    "DUPLICATE_HEADER": "En-tête #{header} en double",
+    "MALFORMED_HEADER": "En-tête mal formé",
+    "UNKNOWN_LINE": "Ligne non reconnue",
+    "NO_NOTES": "Aucune note",
+    "MISSING_END": "Ligne de fin « E » manquante",
+    "MISSING_FILE": "Fichier introuvable : {kind}",
+    "ENCODING_NOT_UTF8": "Encodage autre que UTF-8",
+    "ENCODING_UTF8_BOM": "UTF-8 avec BOM",
+    "VIDEO_NOT_H264": "Vidéo pas en MP4 H.264",
+    "VIDEO_TOO_LARGE": "Vidéo plus grande que 1080p",
+    "VIDEO_IS_AUDIO": "Même fichier pour la musique et la vidéo",
+    "REPLAYGAIN_MISSING": "Pas de ReplayGain",
+    "NAMING": "Nommage des fichiers"
+  },
+  "preferences": {
+    "title": "Préférences",
+    "namingTitle": "Nommage des fichiers",
+    "namingIntro": "Nom attendu de chaque élément. Utilisez {artist} et {title} (tirés de #ARTIST et #TITLE) ; l’extension n’est pas vérifiée. Décochez un élément pour ne plus le vérifier.",
+    "item": "Élément",
+    "pattern": "Modèle",
+    "preview": "Exemple",
+    "patternOf": "Modèle : {item}",
+    "notChecked": "non vérifié",
+    "defaults": "Valeurs par défaut",
+    "save": "Enregistrer",
+    "saved": "Préférences enregistrées : la bibliothèque a été relue avec les nouveaux modèles.",
+    "invalid": "Un modèle n’est pas valide : voir le champ en rouge.",
+    "kinds": {
+      "folder": "Dossier",
+      "txt": "Fichier chanson",
+      "duet": "Fichier chanson (duo)",
+      "audio": "Audio",
+      "video": "Vidéo",
+      "cover": "Pochette",
+      "background": "Fond",
+      "vocals": "Voix seule",
+      "instrumental": "Instrumental"
+    },
+    "errors": {
+      "PATTERN_EMPTY": "Saisissez un modèle.",
+      "PATTERN_TOO_LONG": "Modèle trop long (200 caractères au plus).",
+      "PATTERN_NO_PLACEHOLDER": "Utilisez {artist} et/ou {title}.",
+      "PATTERN_UNKNOWN_PLACEHOLDER": "Seuls {artist} et {title} sont possibles.",
+      "PATTERN_FORBIDDEN_CHARACTER": "Les caractères \\ / : * ? \" < > | sont interdits dans un nom de fichier."
+    }
+  },
+  "rename": {
+    "open": "Renommer selon la norme",
+    "title": "Renommer selon la norme",
+    "intro": "Le dossier et tous ses fichiers, avec le nom proposé par les normes de nommage (Préférences). Chaque nom est modifiable, même s'il est déjà conforme. Les fichiers cités par aucun .txt n'ont pas de nom proposé : ils ne changent que si vous les renommez.",
+    "current": "Nom actuel",
+    "newName": "Nouveau nom",
+    "newNameOf": "Nouveau nom de {name}",
+    "reset": "Revenir au nom proposé",
+    "sharedBy": {
+      "one": "cité par {count} fichier .txt",
+      "other": "cité par {count} fichiers .txt"
+    },
+    "txtTitle": "Modifications des fichiers .txt",
+    "noTxtChange": "Aucun fichier .txt à modifier.",
+    "onlyName": "Seul le nom du fichier change.",
+    "unencodable": "« {character} » ne peut pas s'écrire dans {txtFile} (encodage Windows-1252) : convertissez d'abord ce fichier en UTF-8.",
+    "summary": {
+      "one": "{count} élément à renommer",
+      "other": "{count} éléments à renommer"
+    },
+    "summaryConflicts": {
+      "one": "{count} conflit à résoudre",
+      "other": "{count} conflits à résoudre"
+    },
+    "apply": {
+      "one": "Renommer {count} élément",
+      "other": "Renommer {count} éléments"
+    },
+    "cancel": "Annuler",
+    "done": {
+      "one": "Renommage fait : {count} élément renommé.",
+      "other": "Renommage fait : {count} éléments renommés."
+    },
+    "backups": "Sauvegarde des .txt modifiés : {files}",
+    "undo": "Annuler ce renommage",
+    "undone": "Renommage annulé : les noms et les fichiers .txt d'origine sont rétablis.",
+    "reopened": "Renommage fait.",
+    "noIdentity": "#ARTIST ou #TITLE manquant : aucun nom ne peut être proposé, mais vous pouvez en saisir.",
+    "kinds": {
+      "folder": "Dossier",
+      "other": "Autre fichier"
+    },
+    "status": {
+      "conflict": "Conflit",
+      "ignored": "Non cité",
+      "rename": "Renommé",
+      "ok": "Conforme",
+      "kept": "Inchangé"
+    },
+    "errors": {
+      "EMPTY": "Saisissez un nom.",
+      "FORBIDDEN_CHARACTER": "Caractères interdits : \\ / : * ? \" < > |",
+      "TRAILING_DOT_OR_SPACE": "Un nom ne peut pas finir par un point ou une espace.",
+      "RESERVED_NAME": "Nom réservé par Windows (CON, NUL, COM1…).",
+      "TOO_LONG": "Nom trop long (200 caractères au plus).",
+      "EXTENSION_CHANGED": "L'extension ne peut pas changer.",
+      "DUPLICATE": "Un autre fichier porte déjà ce nom.",
+      "EXISTS": "Un dossier porte déjà ce nom."
+    },
+    "short": "Renommer"
   }
 }

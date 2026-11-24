@@ -16,7 +16,7 @@
  *
  * @module services/videoConvertService
  */
-import { access, rename, rm, stat, unlink } from 'node:fs/promises';
+import { access, rm, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import {
   isOversizedVideo,
@@ -26,7 +26,7 @@ import {
 } from '../parsers/mp4Video.js';
 import { resolveInside } from '../utils/safePath.js';
 import { FfmpegError } from './ffmpegService.js';
-import { backupFile } from './fileWriter.js';
+import { backupFile, LOCKED_FILE_CODES, renameWithRetry, replaceFile } from './fileWriter.js';
 import { SongEditError } from './songEditService.js';
 import { probeVideoFile } from './videoProbe.js';
 
@@ -216,14 +216,14 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
       });
 
       if (plan.replaces) {
-        await rename(temp, plan.source);
+        await replaceFile(temp, plan.source); // l'original peut être en cours de lecture
       } else {
         if (await exists(plan.target)) {
           throw new SongEditError('VIDEO_TARGET_EXISTS', `${plan.targetName} already exists`, 409, {
             file: plan.targetName,
           });
         }
-        await rename(temp, plan.target);
+        await renameWithRetry(temp, plan.target);
         try {
           await editor.setVideoFile(song.id, { video: plan.targetName, expectedModifiedAt });
         } catch (error) {
@@ -239,8 +239,13 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
       Object.assign(job, { state: 'done', progress: 1 });
     } catch (error) {
       const known = error instanceof SongEditError || error instanceof FfmpegError;
+      // Fichier verrouillé (Windows) : message clair plutôt que « la conversion a échoué ».
+      const locked = LOCKED_FILE_CODES.has(
+        /** @type {NodeJS.ErrnoException} */ (error)?.code ?? '',
+      );
       if (!known) logger.warn(`Video conversion failed for ${song.folder}: ${error}`);
-      Object.assign(job, { state: 'error', code: known ? error.code : 'VIDEO_CONVERSION_FAILED' });
+      const code = known ? error.code : locked ? 'FILE_LOCKED' : 'VIDEO_CONVERSION_FAILED';
+      Object.assign(job, { state: 'error', code });
     } finally {
       await rm(temp, { force: true });
       job.finishedAt = Date.now();
@@ -369,6 +374,9 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
       };
     },
 
+    /** ffmpeg est-il disponible ? (outils de la fenêtre info) */
+    isFfmpegAvailable: () => ffmpeg.isAvailable(),
+
     /**
      * Dernière conversion de cette chanson (en cours ou terminée), ou null.
      * @param {string} id
@@ -430,7 +438,7 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
         if (size === 0) {
           throw new SongEditError('AUDIO_EXTRACTION_FAILED', 'Extracted MP3 is empty', 500);
         }
-        await rename(temp, target);
+        await renameWithRetry(temp, target);
         try {
           const result = await editor.setAudioFile(id, { audio: targetName, expectedModifiedAt });
           logger.info(`Audio extracted ${song.folder}/${sourceName} → ${targetName}`);

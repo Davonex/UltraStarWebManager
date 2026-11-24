@@ -42,6 +42,17 @@ describe('API', () => {
     assert.equal((await res.json()).nav.language, 'Langue');
   });
 
+  it('sert le favicon (SVG et .ico de secours)', async () => {
+    const svg = await fetch(`${baseUrl}/img/favicon.svg`);
+    assert.equal(svg.status, 200);
+    assert.match(svg.headers.get('content-type') ?? '', /image\/svg\+xml/);
+    const ico = await fetch(`${baseUrl}/favicon.ico`);
+    assert.equal(ico.status, 200);
+    // En-tête ICO : réservé 0, type 1 (icône)
+    const bytes = new Uint8Array(await ico.arrayBuffer());
+    assert.deepEqual([...bytes.slice(0, 4)], [0, 0, 1, 0]);
+  });
+
   it('sert la page d’accueil', async () => {
     const res = await fetch(`${baseUrl}/`);
     assert.equal(res.status, 200);

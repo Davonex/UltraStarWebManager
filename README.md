@@ -12,28 +12,35 @@ no build step).
   and file problems.
 - **Fast filters** (in the browser): search by artist/title (accent-insensitive), then
   multiple-choice **Language, Decade, Genre, Edition, Tags** windows with song counts and
-  UltraStar category images, plus **Duets** and **Warnings** toggles. Filters are kept in the URL.
+  UltraStar category images, plus **Duets** and **Warnings** (by type) filters. Filters are kept in the URL.
 - **Audio preview**: 30-second excerpt from `#PREVIEWSTART` (or the medley, or 30% of the song),
   with fade-out, seekable progress bar and remembered volume.
 - **Muted video** in sync with the preview, shifted by `#VIDEOGAP` like UltraStar Deluxe.
 - **Video check and conversion**: format, codec and resolution in the details window; a warning
   for every video that is not MP4 H.264 or is larger than 1080p, with a one-click conversion
   (write access, needs ffmpeg).
-- **Song details** window: information, timing, files present or missing, statistics, warnings
-  and every other header of the `.txt`.
+- **Song details** window: information, timing, files present or missing, **ReplayGain** of the
+  audio file, statistics, warnings and every other header of the `.txt`.
 - **File checks**: each song lists its problems (missing headers or files, missing year or
-  language, missing end line, encoding other than UTF-8 without BOM as required by format 1.1.0…).
+  language, missing end line, encoding other than UTF-8 without BOM as required by format 1.1.0,
+  folder or file names not following `Artist - Title [suffix]`…).
 - **Playlists**: the `.upl` files of `PLAYLIST_DIR` become a **Playlists** filter, each one shown
   with a mosaic of its first covers. While a song plays, the **Playlists** button of the bottom bar
   lists them, ticked when they contain the song: tick to add it, untick to remove it (write access).
 - **MusicBrainz** (write access): look up the **year, language and genre** of a song on
   [MusicBrainz](https://musicbrainz.org/) and keep the values you choose.
-- **Editing** (write access): double-click a song's **Edition, Tags or Creator** in the details
-  window to edit it in place, picking existing values or creating new ones; dated backup,
-  original encoding kept.
+- **Editing** (write access): double-click a song's **Language, Genre, Year, Edition, Tags,
+  Creator** or, for duets, **singer names (P1 / P2)** in the details window to edit it in place,
+  picking existing values or creating new ones; dated backup, original encoding kept.
 - **Bulk corrections** (write access, toolbox button in the top bar): simulate first, pick the
   files, then apply with a progress bar. Tools: convert every file to UTF-8 without BOM; convert
   videos to MP4 H.264 in batches (10 by default) in the background.
+- **Preferences** (admin, gear button in the top bar): the expected **file naming** of each item
+  (folder, `.txt`, duet `.txt`, audio, video, cover, background, vocals, instrumental), each one
+  with an on/off switch, an editable pattern such as `{artist} - {title} [CO]` and a live example.
+- **Rename to the naming rules** (write access): from the naming warning of a song, a window
+  lists the folder and every file (current name → suggested name, editable, with conflicts) and
+  the changes to each `.txt`, then renames everything at once, with undo.
 - **Refresh** button to re-read the library without restarting the server.
 - **Access levels** for sharing on a local network: read (can be public) < write < admin.
 - **English and French** interface, mobile-friendly.
@@ -74,6 +81,7 @@ Open <http://127.0.0.1:3000>. On this PC you have full (admin) access, no key ne
 | `TRUST_LOCALHOST`     | `true` (default): requests from this PC are admin without a key                                                             |
 | `SESSION_DAYS`        | How long a sign-in lasts (default `30`)                                                                                     |
 | `BACKUP_DIR`          | Dated backups of edited files (default: `backups/` in the project)                                                          |
+| `SETTINGS_FILE`       | Preferences saved from the interface (default: `settings.json` in the project, ignored by git)                              |
 | `FFMPEG_PATH`         | Full path of `ffmpeg.exe` (`ffprobe.exe` next to it); empty = `ffmpeg` from the `PATH`. Optional: only for video conversion |
 
 Paths may contain spaces and parentheses, no quotes needed, e.g.
@@ -115,7 +123,7 @@ duet singers), timing (BPM, GAP, VIDEOGAP, preview start, medley, START/END), fi
 ✘ missing), statistics (notes, phrases), warnings and all other headers.
 
 **Warnings** — The ⚠ badge on a cover counts the problems found in its `.txt` (hover it, or open
-the details). The **⚠ Warnings** chip lists only those songs.
+the details). The **⚠ Warnings** chip opens the list of warning types (with **All warnings** first), each with its number of songs: pick one or several types.
 
 **Playlists** — Set `PLAYLIST_DIR` to your UltraStar playlists folder. Each `.upl` file
 (lines `Artist : Title`) is linked to the library by artist and title (case, accents and extra
@@ -136,10 +144,13 @@ ticked values replace `#YEAR`, `#LANGUAGE` and `#GENRE`, with the same safe savi
 server calls MusicBrainz itself (identified User-Agent, at most one request per second, answers
 cached), so the browser page stays under the strict CSP.
 
-**Editing** (write access) — In the details window, **double-click** the value of **Edition**,
-**Tags** or **Creator** (or click the ✏ that appears on hover, always visible on touch screens)
-to edit it in place. The field lists the values already used in your library (pick one, keeping
-its exact spelling) or accepts a new one: press Enter to add, × to remove. **Save** with ✓ or
+**Editing** (write access) — In the details window, **double-click** the value of **Language**,
+**Genre**, **Year**, **Edition**, **Tags**, **Creator** or, for duets, **Singer 1 / Singer 2**
+(or click the ✏ that appears on hover, always visible on touch screens) to edit it in place.
+Year and singers are a simple text field (Enter saves, Esc cancels; a singer name may contain
+commas; old files using `#DUETSINGERP1` / `#DUETSINGERP2` keep those headers). The other fields
+list the values already used in your library (pick one, keeping its exact spelling) or accept a
+new one: press Enter to add, × to remove. **Save** with ✓ or
 Enter in an empty input; **cancel** with ✕ or Esc. Saving:
 
 1. refuses if the file was changed elsewhere since it was displayed (e.g. in Yass);
@@ -171,6 +182,34 @@ formats) and, under the warning, a **Convert video to MP4 H.264** button:
    `clip.avi` becomes `clip.mp4`, `#VIDEO` is updated in the `.txt` (with its own backup) and the
    original is removed from the song folder; an MP4 in another codec is replaced under the same
    name. If anything fails, the song folder is left as it was.
+
+**File names** — Format 1.1.0 asks the audio file to have the same name as the folder, the cover
+to end with `[CO]`, the background with `[BG]`, and vocals / instrumental files to carry `[VOC]` /
+`[INSTR]`; it sets no rule for the folder and the `.txt`. Following the community convention (as in
+Karedi), every name is checked against `Artist - Title` (from `#ARTIST` and `#TITLE`):
+
+| Item                 | Expected name                                                |
+| -------------------- | ------------------------------------------------------------ |
+| folder               | `Artist - Title`                                             |
+| song file            | `Artist - Title.txt`; duet: `Artist - Title [DUET].txt`      |
+| audio, video         | `Artist - Title.<ext>`                                       |
+| cover, background    | `Artist - Title [CO].<ext>`, `Artist - Title [BG].<ext>`     |
+| vocals, instrumental | `Artist - Title [VOC].<ext>`, `Artist - Title [INSTR].<ext>` |
+
+Case, accents and extra spaces are ignored; a character Windows forbids in file names (`/ : ? *…`)
+may be removed or replaced by `-`, `_` or a space (`AC/DC` → `AC-DC`); a duet mark at the end of the
+title (`[DUET]`, `(Duet)`, `- DUO`) is ignored for the folder and media files. Each misnamed item
+gets its own warning, showing the expected name.
+
+**ReplayGain** — The details window shows the ReplayGain tags of the audio file (track and album
+gain in dB, peak), read from its ID3v2 tag (`TXXX:REPLAYGAIN_*`, written by foobar2000, mp3tag,
+beets…) or its APEv2 tag (written by MP3Gain). Only a few KB of the file are read, when the window
+opens; nothing is written.
+MP3 files without ReplayGain get a warning. Under it, **Calculate the ReplayGain** measures the song
+with ffmpeg (`replaygain` filter, 89 dB reference like MP3Gain) and shows the track gain and peak;
+**Write to the MP3** then stores them as `REPLAYGAIN_TRACK_GAIN` / `REPLAYGAIN_TRACK_PEAK` in the
+ID3 tag. Only the tag is rewritten (same ID3 version, other frames such as the cover kept byte for
+byte); the audio data is not touched. The MP3 is backed up first and written atomically.
 
 **Music and video in the same file** — Some songs use the same MP4 for `#MP3` (or `#AUDIO`) and
 `#VIDEO`: they get a warning, and are never converted (the conversion drops the soundtrack). Under
@@ -230,40 +269,72 @@ The tool is meant for **this PC or a local network (intranet)**, never the Inter
   locally, so the tool also works offline.
 - Every path coming from the browser is checked to stay inside the configured folders.
 
+**Rename to the naming rules** (write access) — In the details window, the naming problems of a
+song are grouped in one warning, with a **Rename to the naming rules** button. The rename works on
+the whole **folder**: every `.txt` in it (classic, duet…) shares the music, video and cover, so
+each `.txt` citing a renamed file is updated. The window shows:
+
+- the folder and each file: current name, suggested name (editable, with a button to go back to
+  the suggestion) and a status — compliant, renamed, conflict (forbidden character, name already
+  taken, extension changed…) or not used (files cited by no `.txt` are never renamed);
+- the changes to each `.txt` (`#MP3`, `#VIDEO`, `#COVER`…), and its new name.
+
+**Rename** is available once there is no conflict. The preview stops first (Windows locks files
+being read), each changed `.txt` gets its dated backup, files are renamed in two steps (so a
+case-only change works on Windows), the `.txt` files are rewritten in their original encoding and
+the folder is renamed last. If any step fails, everything already done is put back. A journal
+is written to `BACKUP_DIR/renames/`, and **Undo this rename** restores the names and `.txt`
+contents, provided nothing changed in the meantime. Playlists (`.upl`, "Artist : Title") and
+UltraStar Deluxe scores (artist and title) are not affected.
+
+**Preferences** (admin) — The gear button in the top bar opens the preferences. The **File
+naming** section lists each item checked by the naming warnings: folder, song `.txt`, duet `.txt`,
+audio, video, cover, background, vocals and instrumental. For each one: a box to turn the check on
+or off, the pattern of the expected name (`{artist}` and `{title}` come from `#ARTIST` and
+`#TITLE`; the extension is not checked) and an example of the result. **Default values** restores
+`{artist} - {title}` with the `[DUET]`, `[CO]`, `[BG]`, `[VOC]` and `[INSTR]` suffixes. **Save**
+writes `settings.json` (see `SETTINGS_FILE`), then re-reads the library so the warnings follow the
+new patterns at once. Characters forbidden in Windows file names are refused.
+
 ## API
 
 All responses are JSON: `{ data: … }` on success, `{ error: { code, message } }` on error
 (`401 AUTH_REQUIRED`, `403 FORBIDDEN_ROLE`, `404 SONG_NOT_FOUND`, `503 SONG_DIR_NOT_CONFIGURED`…).
 
-| Method | URL                                       | Access | Response                                                                                                                             |
-| ------ | ----------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/api/health`                             | public | `{ status, version }`                                                                                                                |
-| GET    | `/api/auth/me`                            | public | `{ data: { role, isLocal, signedIn, hasKeys } }`                                                                                     |
-| POST   | `/api/auth/login`                         | public | `{ key }` → session cookie, `{ data: { role } }`                                                                                     |
-| POST   | `/api/auth/logout`                        | public | Removes the session cookie                                                                                                           |
-| GET    | `/login?key=…`                            | public | Sign-in link, redirects to `/`                                                                                                       |
-| GET    | `/api/songs`                              | read   | `{ data: Song[], meta: { count, scannedAt, durationMs, … } }`                                                                        |
-| GET    | `/api/songs/:id`                          | read   | Details re-read from the `.txt`: `{ data: { song, details } }`                                                                       |
-| GET    | `/api/songs/:id/cover`                    | read   | Cover image (browser cache 7 days)                                                                                                   |
-| GET    | `/api/songs/:id/audio`                    | read   | Audio file, `Range` supported                                                                                                        |
-| GET    | `/api/songs/:id/video`                    | read   | Video file, `Range` supported                                                                                                        |
-| GET    | `/api/playlists`                          | read   | `{ data: [{ name, file, modifiedAt, songIds, missing }], meta: { configured } }`                                                     |
-| POST   | `/api/playlists/:file/songs`              | write  | Add a song: `{ songId, expectedModifiedAt }` → `{ data: { playlist, changed, backup } }`                                             |
-| DELETE | `/api/playlists/:file/songs`              | write  | Remove a song: same body and answer                                                                                                  |
-| GET    | `/api/songs/:id/musicbrainz`              | write  | MusicBrainz recordings matching the song: `{ data: { candidates } }`                                                                 |
-| GET    | `/api/songs/:id/musicbrainz/:recordingId` | write  | Proposed values: `{ data: { suggestion: { year, languages, genres } } }` (`?artistId=&releaseGroupId=` optional)                     |
-| GET    | `/api/facet-images`                       | read   | `{ data: { language, decade, edition, tag } }` values with an image                                                                  |
-| GET    | `/api/facet-images/:facet/:value`         | read   | Category image, e.g. `/language/French`                                                                                              |
-| POST   | `/api/catalog/rescan`                     | write  | Re-reads every `.txt`: `{ data: { count, durationMs, … } }`                                                                          |
-| PATCH  | `/api/songs/:id/headers`                  | write  | `{ values: { EDITION, TAGS, CREATOR, YEAR, GENRE, LANGUAGE }, expectedModifiedAt, dryRun? }` → `{ data: { changes, song, backup } }` |
-| POST   | `/api/songs/:id/convert-utf8`             | write  | `{ expectedModifiedAt, dryRun? }` → `{ data: { changed, from, song, backup } }`                                                      |
-| POST   | `/api/songs/:id/convert-video`            | write  | `{ expectedModifiedAt, dryRun? }` → `200 { data: { plan } }` (simulation) or `202 { data: { plan, job } }`                           |
-| GET    | `/api/songs/:id/convert-video`            | write  | Progress of the last conversion: `{ data: { job } }` (`state`: running, done, error)                                                 |
-| POST   | `/api/songs/:id/extract-audio`            | write  | Create the MP3 of a video used as music: `{ expectedModifiedAt, dryRun? }` → `{ data: { plan, song, headers, backup } }`             |
-| POST   | `/api/bulk/convert-video`                 | write  | `{ dryRun: true }` → `{ data: { available, items } }`; `{ items: [{ id, expectedModifiedAt }] }` (≤ 200) → `202 { data: { batch } }` |
-| GET    | `/api/bulk/convert-video`                 | write  | Current or last batch: `{ data: { batch } }` (`state`: running, done, stopped)                                                       |
-| POST   | `/api/bulk/convert-video/stop`            | write  | Stop the batch after the current video                                                                                               |
-| POST   | `/api/bulk/convert-utf8`                  | write  | `{ dryRun: true }` → `{ data: { items } }`; `{ items: [{ id, expectedModifiedAt }] }` (≤ 200) → `{ data: { results } }`              |
+| Method | URL                                       | Access | Response                                                                                                                                                       |
+| ------ | ----------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/health`                             | public | `{ status, version }`                                                                                                                                          |
+| GET    | `/api/auth/me`                            | public | `{ data: { role, isLocal, signedIn, hasKeys } }`                                                                                                               |
+| POST   | `/api/auth/login`                         | public | `{ key }` → session cookie, `{ data: { role } }`                                                                                                               |
+| POST   | `/api/auth/logout`                        | public | Removes the session cookie                                                                                                                                     |
+| GET    | `/login?key=…`                            | public | Sign-in link, redirects to `/`                                                                                                                                 |
+| GET    | `/api/songs`                              | read   | `{ data: Song[], meta: { count, scannedAt, durationMs, … } }`                                                                                                  |
+| GET    | `/api/songs/:id`                          | read   | Details re-read from the `.txt`: `{ data: { song, details } }`                                                                                                 |
+| GET    | `/api/songs/:id/cover`                    | read   | Cover image (browser cache 7 days)                                                                                                                             |
+| GET    | `/api/songs/:id/audio`                    | read   | Audio file, `Range` supported                                                                                                                                  |
+| GET    | `/api/songs/:id/video`                    | read   | Video file, `Range` supported                                                                                                                                  |
+| GET    | `/api/playlists`                          | read   | `{ data: [{ name, file, modifiedAt, songIds, missing }], meta: { configured } }`                                                                               |
+| POST   | `/api/playlists/:file/songs`              | write  | Add a song: `{ songId, expectedModifiedAt }` → `{ data: { playlist, changed, backup } }`                                                                       |
+| DELETE | `/api/playlists/:file/songs`              | write  | Remove a song: same body and answer                                                                                                                            |
+| POST   | `/api/songs/:id/rename`                   | write  | `{ dryRun: true, overrides? }` → `{ data: plan }`; `{ overrides?, expected }` → `{ data: { songId, journal, renamed, backups } }`                              |
+| POST   | `/api/renames/:journal/undo`              | write  | Undo a rename: `{ data: { songIds } }`                                                                                                                         |
+| GET    | `/api/songs/:id/musicbrainz`              | write  | MusicBrainz recordings matching the song: `{ data: { candidates } }`                                                                                           |
+| GET    | `/api/songs/:id/musicbrainz/:recordingId` | write  | Proposed values: `{ data: { suggestion: { year, languages, genres } } }` (`?artistId=&releaseGroupId=` optional)                                               |
+| GET    | `/api/settings`                           | read   | `{ data: { naming }, meta: { defaults } }` — `naming.<kind> = { enabled, pattern }`                                                                            |
+| PUT    | `/api/settings`                           | admin  | Same `{ naming }` → saved, library re-read, `{ data }` (`400 INVALID_SETTINGS` with `params: { kind, reason }`)                                                |
+| GET    | `/api/facet-images`                       | read   | `{ data: { language, decade, edition, tag } }` values with an image                                                                                            |
+| GET    | `/api/facet-images/:facet/:value`         | read   | Category image, e.g. `/language/French`                                                                                                                        |
+| POST   | `/api/catalog/rescan`                     | write  | Re-reads every `.txt`: `{ data: { count, durationMs, … } }`                                                                                                    |
+| PATCH  | `/api/songs/:id/headers`                  | write  | `{ values: { EDITION, TAGS, CREATOR, YEAR, GENRE, LANGUAGE, P1, P2 }, expectedModifiedAt, dryRun? }` → `{ data: { changes, song, backup } }`                   |
+| POST   | `/api/songs/:id/convert-utf8`             | write  | `{ expectedModifiedAt, dryRun? }` → `{ data: { changed, from, song, backup } }`                                                                                |
+| POST   | `/api/songs/:id/convert-video`            | write  | `{ expectedModifiedAt, dryRun? }` → `200 { data: { plan } }` (simulation) or `202 { data: { plan, job } }`                                                     |
+| GET    | `/api/songs/:id/convert-video`            | write  | Progress of the last conversion: `{ data: { job } }` (`state`: running, done, error)                                                                           |
+| POST   | `/api/songs/:id/extract-audio`            | write  | Create the MP3 of a video used as music: `{ expectedModifiedAt, dryRun? }` → `{ data: { plan, song, headers, backup } }`                                       |
+| POST   | `/api/songs/:id/replaygain`               | write  | `{ dryRun: true }` → `{ data: { trackGain, trackPeak, audioModifiedAt } }`; `{ trackGain, trackPeak, expectedAudioModifiedAt }` → `{ data: { song, backup } }` |
+| POST   | `/api/bulk/convert-video`                 | write  | `{ dryRun: true }` → `{ data: { available, items } }`; `{ items: [{ id, expectedModifiedAt }] }` (≤ 200) → `202 { data: { batch } }`                           |
+| GET    | `/api/bulk/convert-video`                 | write  | Current or last batch: `{ data: { batch } }` (`state`: running, done, stopped)                                                                                 |
+| POST   | `/api/bulk/convert-video/stop`            | write  | Stop the batch after the current video                                                                                                                         |
+| POST   | `/api/bulk/convert-utf8`                  | write  | `{ dryRun: true }` → `{ data: { items } }`; `{ items: [{ id, expectedModifiedAt }] }` (≤ 200) → `{ data: { results } }`                                        |
 
 The `Song` and `SongDetails` formats are described by their `@typedef` in
 `src/services/catalogService.js`. Each song has a `warnings` list of

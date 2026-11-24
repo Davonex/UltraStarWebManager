@@ -32,6 +32,7 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
  * @property {string | null} playlistDir
  * @property {string | null} categoryCoversDir Dossier `covers` d'UltraStar (images des catégories).
  * @property {string} backupDir  Sauvegardes datées des fichiers modifiés (défaut : ./backups).
+ * @property {string} settingsFile  Préférences (modèles de nommage…), défaut ./settings.json.
  * @property {string} ffmpegPath  ffmpeg (« ffmpeg » si dans le PATH) ; ffprobe à côté.
  * @property {Readonly<Record<Role, string | null>>} accessKeys  Clé de chaque niveau d'accès.
  * @property {readonly string[]} allowedHosts  Noms d'hôte supplémentaires autorisés (en-tête Host).
@@ -91,6 +92,7 @@ export function loadConfig(env = process.env) {
     categoryCoversDir: env.CATEGORY_COVERS_DIR || null,
     backupDir: path.resolve(PROJECT_ROOT, env.BACKUP_DIR || 'backups'),
     ffmpegPath: env.FFMPEG_PATH || 'ffmpeg',
+    settingsFile: path.resolve(PROJECT_ROOT, env.SETTINGS_FILE || 'settings.json'),
     accessKeys: Object.freeze(accessKeys),
     allowedHosts: Object.freeze(
       (env.ALLOWED_HOSTS ?? '')
