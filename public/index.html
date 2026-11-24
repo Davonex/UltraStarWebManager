@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>UltraStarWebManager</title>
+    <!-- Favicon : SVG pour les navigateurs actuels, .ico en secours, PNG pour l'écran d'accueil d'un téléphone -->
+    <link rel="icon" href="/img/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="apple-touch-icon" href="/img/apple-touch-icon.png" />
     <link
       rel="stylesheet"
       href="/vendor/bootstrap/css/bootstrap.min.css"
@@ -17,9 +21,26 @@
     -->
     <nav class="navbar bg-body-tertiary border-bottom sticky-top">
       <div class="container-fluid gap-2 flex-nowrap">
-        <span class="navbar-brand me-auto text-truncate" data-i18n="app.title">UltraStarWebManager</span>
+        <span class="navbar-brand me-auto text-truncate d-flex align-items-center gap-2">
+          <img src="/img/favicon.svg" alt="" width="24" height="24" />
+          <span data-i18n="app.title">UltraStarWebManager</span>
+        </span>
         <span id="server-status" class="badge text-bg-secondary">Connecting…</span>
         <span id="role-badge" class="badge text-bg-secondary" hidden></span>
+        <button
+          id="preferences-button"
+          type="button"
+          class="btn btn-sm btn-outline-secondary"
+          title="Preferences"
+          aria-label="Preferences"
+          data-i18n-title="preferences.title"
+          data-i18n-aria-label="preferences.title"
+          data-bs-toggle="modal"
+          data-bs-target="#preferences-modal"
+          hidden
+        >
+          <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#gear" /></svg>
+        </button>
         <button
           id="bulk-button"
           type="button"
@@ -118,9 +139,11 @@
               <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#people-fill" /></svg>
               <span data-i18n="filters.duetOnly">Duets</span>
             </button>
-            <button type="button" class="facet-chip facet-chip-warning" data-action="warnings" aria-pressed="false">
+            <!-- Avertissements : fenêtre de choix par type (« Tous » en tête) -->
+            <button type="button" class="facet-chip facet-chip-warning" data-facet="warning" aria-pressed="false">
               <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#exclamation-triangle-fill" /></svg>
               <span data-i18n="filters.withWarnings">Warnings</span>
+              <span class="facet-chip-count badge rounded-pill" hidden></span>
             </button>
             <button type="button" class="facet-chip facet-chip-reset" data-action="reset" hidden>
               <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#x-lg" /></svg>
@@ -491,6 +514,68 @@
             ></button>
           </div>
           <div class="modal-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Renommer selon la norme (public/js/renameDialog.js), niveau écriture -->
+    <div id="rename-modal" class="modal fade" role="dialog" tabindex="-1" aria-labelledby="rename-modal-title" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div class="min-w-0">
+              <h2 id="rename-modal-title" class="modal-title h5">
+                <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#input-cursor-text" /></svg>
+                <span data-i18n="rename.title">Rename to the naming rules</span>
+              </h2>
+              <p class="rename-subtitle small text-body-secondary mb-0 text-truncate"></p>
+            </div>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+              data-i18n-aria-label="common.close"
+            ></button>
+          </div>
+          <div class="modal-body"></div>
+          <div class="modal-footer"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Préférences (public/js/preferencesView.js), niveau admin -->
+    <div id="preferences-modal" class="modal fade" role="dialog" tabindex="-1" aria-labelledby="preferences-modal-title" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 id="preferences-modal-title" class="modal-title h5">
+              <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#gear" /></svg>
+              <span data-i18n="preferences.title">Preferences</span>
+            </h2>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+              data-i18n-aria-label="common.close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <h3 class="h6" data-i18n="preferences.namingTitle">File naming</h3>
+            <p class="small text-body-secondary" data-i18n="preferences.namingIntro">
+              Expected name of each item. Use {artist} and {title} (from #ARTIST and #TITLE); the extension is not
+              checked. Untick an item to stop checking it.
+            </p>
+            <div data-part="naming"></div>
+          </div>
+          <div class="modal-footer justify-content-between">
+            <div data-part="status" class="me-auto" aria-live="polite"></div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-action="defaults" data-i18n="preferences.defaults">
+              Default values
+            </button>
+            <button type="button" class="btn btn-sm btn-primary" data-action="save" data-i18n="preferences.save">Save</button>
+          </div>
         </div>
       </div>
     </div>

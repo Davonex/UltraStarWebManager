@@ -16,7 +16,7 @@ import { decodeSongBuffer } from '../parsers/ultrastarTxt.js';
 import { UnencodableCharacterError } from '../utils/windows1252.js';
 import { backupFile, writeFileAtomic } from './fileWriter.js';
 
-/** En-têtes modifiables depuis l'interface (YEAR, GENRE, LANGUAGE : via MusicBrainz). */
+/** En-têtes modifiables depuis l'interface (fenêtre info, MusicBrainz). */
 export const EDITABLE_HEADERS = Object.freeze([
   'EDITION',
   'TAGS',
@@ -24,7 +24,13 @@ export const EDITABLE_HEADERS = Object.freeze([
   'YEAR',
   'GENRE',
   'LANGUAGE',
+  'P1',
+  'P2',
 ]);
+/** En-têtes à une seule valeur (pas de liste séparée par des virgules). */
+const SINGLE_VALUE_HEADERS = new Set(['P1', 'P2']);
+/** Ancien nom des chanteurs d'un duo (avant le format 1.0.0), mis à jour s'il est utilisé. */
+const LEGACY_SINGER_HEADERS = Object.freeze({ P1: 'DUETSINGERP1', P2: 'DUETSINGERP2' });
 /** Longueur maximale d'une valeur d'en-tête. */
 export const MAX_VALUE_LENGTH = 500;
 /** Écart toléré sur la date de modification (arrondis du système de fichiers), en ms. */
@@ -66,6 +72,11 @@ export function normalizeHeaderValue(header, value) {
   }
   if (value.length > MAX_VALUE_LENGTH || CONTROL_CHARACTERS.test(value)) {
     throw new SongEditError('INVALID_VALUE', `Invalid value for ${header}`, 400, { header });
+  }
+  if (SINGLE_VALUE_HEADERS.has(header)) {
+    // Nom d'un chanteur : texte simple (il peut contenir des virgules).
+    const clean = value.trim().replace(/\s+/g, ' ');
+    return clean === '' ? null : clean;
   }
   if (header === 'YEAR') {
     // Une seule valeur : une année sur 4 chiffres (vide = supprimer l'en-tête).
@@ -182,6 +193,37 @@ export function createSongEditor({ catalog, backupDir, logger = console }) {
     },
 
     /**
+     * Remplace le fichier audio référencé, après l'extraction du MP3 d'une vidéo.
+     * Met à jour #AUDIO et/ou #MP3, selon ceux présents dans le fichier (format 1.1.0 :
+     * #AUDIO ; anciens fichiers : #MP3). Usage interne, comme setVideoFile.
+     *
+     * @param {string} id
+     * @param {{ audio: string, expectedModifiedAt: number }} request
+     * @returns {Promise<{ song: import('./catalogService.js').Song, backup: string | null,
+     *   headers: string[] }>}
+     * @throws {SongEditError}
+     */
+    async setAudioFile(id, { audio, expectedModifiedAt }) {
+      const { song, file, buffer } = await loadForWrite(id, expectedModifiedAt);
+      const { text, encoding } = decodeSongBuffer(buffer);
+      const present = ['AUDIO', 'MP3'].filter((header) =>
+        new RegExp(`^#${header}:`, 'im').test(text),
+      );
+      const headers = present.length > 0 ? present : ['MP3'];
+      /** @type {Record<string, string>} */
+      const values = Object.fromEntries(headers.map((header) => [header, audio]));
+      const { text: updated, changes } = updateHeaders(text, values);
+      if (changes.length === 0) return { song, backup: null, headers };
+      const result = await commit(
+        song,
+        file,
+        encodeSongText(updated, encoding),
+        `${headers.join(', ')} → ${audio}`,
+      );
+      return { ...result, headers };
+    },
+
+    /**
      * Modifie des en-têtes d'une chanson.
      *
      * @param {string} id
@@ -207,6 +249,15 @@ export function createSongEditor({ catalog, backupDir, logger = console }) {
 
       const { song, file, buffer } = await loadForWrite(id, expectedModifiedAt);
       const { text, encoding } = decodeSongBuffer(buffer);
+      // Duo à l'ancien format : #DUETSINGERP1 est mis à jour plutôt que d'ajouter un #P1.
+      for (const [header, legacy] of Object.entries(LEGACY_SINGER_HEADERS)) {
+        if (!(header in clean)) continue;
+        const hasLegacy = new RegExp(`^#${legacy}:`, 'im').test(text);
+        if (hasLegacy && !new RegExp(`^#${header}:`, 'im').test(text)) {
+          clean[legacy] = clean[header];
+          delete clean[header];
+        }
+      }
       const { text: updated, changes } = updateHeaders(text, clean);
       if (dryRun || changes.length === 0) return { changes, song, backup: null };
 

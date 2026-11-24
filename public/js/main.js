@@ -22,6 +22,7 @@ import { initLanguageSelector } from './languageSelector.js';
 import { createPlayerBar } from './playerBar.js';
 import { pickMosaicSongs } from './playlistCovers.js';
 import { createPlaylistMenu } from './playlistMenu.js';
+import { createPreferencesView } from './preferencesView.js';
 import { createPreviewPlayer } from './previewPlayer.js';
 import { createSongDetailsView } from './songDetails.js';
 import {
@@ -50,6 +51,7 @@ const videoPanel = createVideoPanel(byId('video-panel'));
 const videoSwitch = /** @type {HTMLInputElement} */ (byId('video-switch'));
 const rescanButton = /** @type {HTMLButtonElement} */ (byId('rescan-button'));
 const bulkButton = /** @type {HTMLButtonElement} */ (byId('bulk-button'));
+const preferencesButton = /** @type {HTMLButtonElement} */ (byId('preferences-button'));
 const playlistChip = /** @type {HTMLElement} */ (document.querySelector('[data-facet="playlist"]'));
 /** Niveaux d'accès, du plus faible au plus fort (comme côté serveur). */
 const ROLE_ORDER = ['read', 'write', 'admin'];
@@ -286,7 +288,11 @@ function imageKey(value) {
 }
 
 const songDetails = createSongDetailsView(
-  { modal: byId('song-modal'), musicBrainzModal: byId('musicbrainz-modal') },
+  {
+    modal: byId('song-modal'),
+    musicBrainzModal: byId('musicbrainz-modal'),
+    renameModal: byId('rename-modal'),
+  },
   {
     getImageUrl: imageUrlFor,
     onPlay: (song) => player.toggle(song),
@@ -299,17 +305,31 @@ const songDetails = createSongDetailsView(
       );
       applyFilters();
     },
+    // Renommage : la lecture est arrêtée (fichiers libérés sous Windows), puis la liste est
+    // rechargée, car les identifiants des chansons dépendent de leur chemin.
+    onBeforeApply: () => player.stop(),
+    async onRenamed(songId) {
+      await loadCatalog();
+      return state.songs.find((s) => s.id === songId) ?? null;
+    },
   },
 );
 
 /**
  * Valeurs existantes dans la bibliothèque, proposées lors d'une modification.
- * @param {'EDITION' | 'TAGS' | 'CREATOR'} header
+ * @param {'EDITION' | 'TAGS' | 'CREATOR' | 'LANGUAGE' | 'GENRE' | 'YEAR' | 'P1' | 'P2'} header
  * @returns {string[]}
  */
 function suggestionsFor(header) {
   /** @type {Record<string, (song: Song) => string[]>} */
-  const pick = { EDITION: (s) => s.editions, TAGS: (s) => s.tags, CREATOR: (s) => s.creators };
+  const pick = {
+    EDITION: (s) => s.editions,
+    TAGS: (s) => s.tags,
+    CREATOR: (s) => s.creators,
+    LANGUAGE: (s) => s.languages,
+    GENRE: (s) => s.genres,
+  };
+  if (!pick[header]) return []; // année, chanteurs : pas de liste proposée
   /** @type {Map<string, string>} */
   const byKey = new Map();
   for (const song of state.songs) {
@@ -339,6 +359,11 @@ videoSwitch.addEventListener('change', () => {
 /** Corrections en masse : après une conversion, on recharge la liste (avertissements à jour). */
 const bulkTools = createBulkTools({ modal: byId('bulk-modal'), onDone: loadCatalog });
 const bulkVideoTool = createBulkVideoTool({ modal: byId('bulk-modal'), onDone: loadCatalog });
+/** Préférences (admin) : après enregistrement, la liste est rechargée (avertissements à jour). */
+const preferencesView = createPreferencesView({
+  modal: byId('preferences-modal'),
+  onSaved: loadCatalog,
+});
 
 /** Bouton « Actualiser » : relit les fichiers .txt puis recharge la liste. */
 rescanButton.addEventListener('click', async () => {
@@ -387,6 +412,7 @@ async function init() {
     bulkTools.refresh();
     bulkVideoTool.refresh();
     playlistMenu.refresh();
+    preferencesView.refresh();
     renderStatus();
     applyFilters();
     renderPlayerBar(player.getState());
@@ -408,6 +434,7 @@ async function init() {
   const canWrite = ROLE_ORDER.indexOf(me.role ?? '') >= ROLE_ORDER.indexOf('write');
   rescanButton.hidden = !canWrite;
   bulkButton.hidden = !canWrite;
+  preferencesButton.hidden = ROLE_ORDER.indexOf(me.role ?? '') < ROLE_ORDER.indexOf('admin');
   if (!me.role) {
     await checkServer();
     authView.showLogin(loginError);

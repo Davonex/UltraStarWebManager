@@ -265,3 +265,49 @@ describe('songEditService — conversion en UTF-8', () => {
     );
   });
 });
+
+describe('songEditService — langue, genre, année et chanteurs', () => {
+  it('chanteur : une seule valeur (virgules gardées) ; année : 4 chiffres', () => {
+    assert.equal(
+      normalizeHeaderValue('P1', '  Freddie  Mercury, Queen '),
+      'Freddie Mercury, Queen',
+    );
+    assert.equal(normalizeHeaderValue('P2', ' '), null);
+    assert.equal(normalizeHeaderValue('YEAR', ' 1985 '), '1985');
+    assert.throws(() => normalizeHeaderValue('YEAR', '85'), SongEditError);
+    assert.equal(normalizeHeaderValue('LANGUAGE', 'French, english, French'), 'French, english');
+  });
+
+  it('duo : met à jour #P1 / #P2, ou l’ancien #DUETSINGERP1 / #DUETSINGERP2 s’il est utilisé', async () => {
+    const duet = (/** @type {string} */ singers) =>
+      `#TITLE:Duo\n#ARTIST:A\n#MP3:a.mp3\n#BPM:300\n${singers}P1\n: 0 1 0 la\nP2\n: 2 1 0 la\nE\n`;
+    const dir = await createSongLibrary({
+      'lib/new/a.txt': duet('#P1:Anne\n#P2:Bob\n'),
+      'lib/old/a.txt': duet('#DUETSINGERP1:Anne\n#DUETSINGERP2:Bob\n'),
+    });
+    try {
+      const catalog = createCatalog({ songDir: path.join(dir.root, 'lib'), logger: silentLogger });
+      await catalog.load();
+      const editor = createSongEditor({
+        catalog,
+        backupDir: path.join(dir.root, 'backups'),
+        logger: silentLogger,
+      });
+      for (const folder of ['new', 'old']) {
+        const song = /** @type {any} */ (catalog.getSongs().find((s) => s.folder === folder));
+        const { changes } = await editor.editHeaders(song.id, {
+          values: { P1: 'Anne-Marie', LANGUAGE: 'French', YEAR: '1999' },
+          expectedModifiedAt: song.modifiedAt,
+        });
+        assert.ok(changes.length === 3, folder);
+        const text = await readFile(path.join(dir.root, 'lib', folder, 'a.txt'), 'utf8');
+        assert.match(text, folder === 'new' ? /#P1:Anne-Marie\n/ : /#DUETSINGERP1:Anne-Marie\n/);
+        assert.doesNotMatch(text, folder === 'new' ? /DUETSINGER/ : /^#P1:/m);
+        assert.match(text, /#LANGUAGE:French\n/);
+        assert.match(text, /#YEAR:1999\n/);
+      }
+    } finally {
+      await dir.cleanup();
+    }
+  });
+});

@@ -641,7 +641,20 @@ summary.details-heading {
 
 .details-warnings {
   margin: 0;
-  padding-left: 1.25rem;
+  padding-left: 0;
+  list-style: none;
+}
+
+/* Icône du type d'avertissement, en retrait comme une puce */
+.details-warnings > li {
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.details-warning-icon {
+  position: absolute;
+  left: 0;
+  top: 0.2em;
 }
 
 /* --- Modification sur place (double-clic) dans la fenêtre de détail ---------------- */
@@ -853,4 +866,64 @@ summary.details-heading {
 }
 .playlist-menu-item:hover {
   background-color: var(--bs-tertiary-bg);
+}
+
+/* Préférences : tableau des modèles de nommage (public/js/preferencesView.js) */
+.preferences-naming th[scope="row"] {
+  width: 14rem;
+}
+.preferences-naming td:last-child {
+  width: 40%;
+}
+
+/* Renommer selon la norme (public/js/renameDialog.js) */
+.rename-table td:first-child {
+  width: 40%;
+}
+
+.rename-table td:last-child {
+  width: 8rem;
+}
+
+.rename-folder td {
+  font-weight: 600;
+}
+
+.rename-diff {
+  font-family: var(--bs-font-monospace);
+  font-size: 0.8125rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  overflow: hidden;
+}
+
+.rename-diff-head {
+  font-family: var(--bs-body-font-family);
+  padding: 0.35rem 0.5rem;
+  background-color: var(--bs-tertiary-bg);
+}
+
+.rename-diff-del,
+.rename-diff-add {
+  padding: 0.1rem 0.5rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rename-diff-del {
+  color: var(--bs-danger-text-emphasis);
+  background-color: var(--bs-danger-bg-subtle);
+}
+
+.rename-diff-add {
+  color: var(--bs-success-text-emphasis);
+  background-color: var(--bs-success-bg-subtle);
+}
+
+.details-naming {
+  margin: 0.15rem 0 0.4rem;
+  padding-left: 1rem;
+}
+.rename-folder td .small {
+  font-weight: normal;
 }

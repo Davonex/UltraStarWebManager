@@ -10,7 +10,10 @@
  * @module filtersView
  */
 import { t } from './i18n.js';
-import { defaultCriteria, normalizeText, toggleFacetValue } from './songFilters.js';
+import { ANY_WARNING, defaultCriteria, normalizeText, toggleFacetValue } from './songFilters.js';
+import { warningIcon } from './warningIcons.js';
+
+const ICONS = '/img/vendor/bootstrap-icons/icons.svg';
 
 /** Délai avant de filtrer pendant la frappe (ms). */
 const SEARCH_DEBOUNCE_MS = 150;
@@ -29,6 +32,7 @@ const FACET_LABEL_KEYS = Object.freeze({
   edition: 'filters.edition',
   tag: 'filters.tag',
   playlist: 'filters.playlist',
+  warning: 'filters.withWarnings',
 });
 
 /** Facettes dont les tuiles ont une vignette (image ou initiales). */
@@ -62,7 +66,22 @@ export function placeholderText(label) {
  * @returns {string}
  */
 function valueLabel(key, value) {
-  return key === 'decade' ? t('filters.decadeLabel', { decade: value }) : value;
+  if (key === 'decade') return t('filters.decadeLabel', { decade: value });
+  if (key === 'warning') return warningLabel(value);
+  return value;
+}
+
+/**
+ * Libellé d'un type d'avertissement (« MISSING_HEADER:YEAR » → « En-tête #YEAR manquant »).
+ * @param {string} type
+ */
+function warningLabel(type) {
+  if (type === ANY_WARNING) return t('filters.allWarnings');
+  const [code, param] = type.split(':');
+  const params = { header: param ?? '', kind: param ? t(`details.${param}`) : '' };
+  const key = `warningTypes.${code}`;
+  const text = t(key, params);
+  return text === key ? code : text;
 }
 
 /**
@@ -89,7 +108,6 @@ export function createFiltersView(
   const sortLabel = $(sortButton, '.sort-label');
   const sortItems = /** @type {HTMLElement[]} */ ([...form.querySelectorAll('[data-sort]')]);
   const duetChip = $(form, '[data-action="duet"]');
-  const warningsChip = $(form, '[data-action="warnings"]');
   const resetChip = $(form, '[data-action="reset"]');
   const facetChips = /** @type {HTMLElement[]} */ ([...form.querySelectorAll('[data-facet]')]);
 
@@ -123,7 +141,6 @@ export function createFiltersView(
     });
   }
   duetChip.addEventListener('click', () => emit({ ...criteria, duet: !criteria.duet }));
-  warningsChip.addEventListener('click', () => emit({ ...criteria, warnings: !criteria.warnings }));
   resetChip.addEventListener('click', () => emit({ ...defaultCriteria(), sort: criteria.sort }));
   for (const chip of facetChips) {
     chip.addEventListener('click', () => {
@@ -154,12 +171,9 @@ export function createFiltersView(
     }
     duetChip.classList.toggle('active', criteria.duet);
     duetChip.setAttribute('aria-pressed', String(criteria.duet));
-    warningsChip.classList.toggle('active', criteria.warnings);
-    warningsChip.setAttribute('aria-pressed', String(criteria.warnings));
     const active =
       criteria.q.trim() !== '' ||
       criteria.duet ||
-      criteria.warnings ||
       facetChips.some((c) => c.classList.contains('active'));
     resetChip.hidden = !active;
   }
@@ -184,6 +198,8 @@ export function createFiltersView(
     const label = document.createElement('span');
     label.className = 'facet-option-label';
     label.textContent = valueLabel(key, option.value);
+    // Avertissements : icône du type devant le libellé (monochrome, couleur du texte).
+    if (key === 'warning') label.prepend(warningIconElement(option.value));
     if (IMAGE_FACETS.has(key)) button.append(createThumbnail(key, option.value, label.textContent));
     const count = document.createElement('span');
     count.className = 'facet-option-count';
@@ -191,6 +207,20 @@ export function createFiltersView(
     button.append(label, count);
     col.append(button);
     return col;
+  }
+
+  /**
+   * @param {string} type  Type d'avertissement (« MISSING_END », « NAMING »…).
+   * @returns {SVGSVGElement}
+   */
+  function warningIconElement(type) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'bi me-2 flex-shrink-0');
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', `${ICONS}#${warningIcon(type)}`);
+    svg.append(use);
+    return svg;
   }
 
   /**

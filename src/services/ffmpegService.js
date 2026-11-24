@@ -83,6 +83,71 @@ export function buildConvertArgs(input, output) {
   ];
 }
 
+/** Qualité MP3 (VBR LAME : 2 ≈ 190 kb/s, transparent pour du karaoké). */
+export const MP3_QUALITY = 2;
+
+/**
+ * Arguments d'extraction de la piste audio en MP3 (la vidéo n'est pas lue).
+ * @param {string} input
+ * @param {string} output
+ * @returns {string[]}
+ */
+export function buildExtractAudioArgs(input, output) {
+  return [
+    '-hide_banner',
+    '-nostdin',
+    '-y',
+    '-i',
+    input,
+    '-map',
+    '0:a:0',
+    '-vn',
+    '-c:a',
+    'libmp3lame',
+    '-q:a',
+    String(MP3_QUALITY),
+    '-f',
+    'mp3',
+    '-progress',
+    'pipe:1',
+    '-nostats',
+    output,
+  ];
+}
+
+/**
+ * Arguments de la mesure ReplayGain : décodage de la piste audio, aucun fichier écrit.
+ * @param {string} input
+ * @returns {string[]}
+ */
+export function buildReplayGainArgs(input) {
+  return [
+    '-hide_banner',
+    '-nostdin',
+    '-i',
+    input,
+    '-map',
+    '0:a:0',
+    '-af',
+    'replaygain',
+    '-f',
+    'null',
+    '-',
+  ];
+}
+
+/**
+ * Lit « track_gain = -2.54 dB » et « track_peak = 0.853360 » dans la sortie de ffmpeg.
+ * @param {string} text
+ * @returns {{ trackGain: number, trackPeak: number } | null}
+ */
+export function parseReplayGainOutput(text) {
+  const gain = /track_gain = ([+-]?\d+(?:\.\d+)?) dB/.exec(text);
+  const peak = /track_peak = (\d+(?:\.\d+)?)/.exec(text);
+  if (!gain || !peak) return null;
+  return { trackGain: Number(gain[1]), trackPeak: Number(peak[1]) };
+}
+
 /**
  * Dernière position (s) annoncée dans la sortie « -progress » de ffmpeg (null si aucune).
  * @param {string} text
@@ -128,7 +193,7 @@ export function parseProbeOutput(json) {
 /** Erreur de ffmpeg (programme absent, conversion échouée…). */
 export class FfmpegError extends Error {
   /**
-   * @param {'FFMPEG_NOT_AVAILABLE' | 'VIDEO_CONVERSION_FAILED'} code
+   * @param {'FFMPEG_NOT_AVAILABLE' | 'VIDEO_CONVERSION_FAILED' | 'AUDIO_EXTRACTION_FAILED' | 'REPLAYGAIN_FAILED'} code
    * @param {string} message
    */
   constructor(code, message) {
@@ -147,6 +212,49 @@ export function createFfmpeg({ ffmpegPath, logger = console }) {
   const ffprobePath = ffprobePathFor(ffmpegPath);
   /** @type {Promise<boolean> | null} */
   let available = null;
+
+  /**
+   * Lance ffmpeg en priorité basse et attend la fin.
+   * @param {string[]} args
+   * @param {object} options
+   * @param {string} options.input  Pour le journal.
+   * @param {(seconds: number) => void} [options.onProgress]
+   * @param {'VIDEO_CONVERSION_FAILED' | 'AUDIO_EXTRACTION_FAILED' | 'REPLAYGAIN_FAILED'} options.failure
+   *   Code d'erreur.
+   * @returns {Promise<string>}  Fin de la sortie d'erreur de ffmpeg (où il écrit ses mesures).
+   */
+  function run(args, { input, onProgress, failure }) {
+    return new Promise((resolve, reject) => {
+      const child = spawn(ffmpegPath, args, { windowsHide: true });
+      // Priorité basse : le PC reste utilisable pendant une longue série de conversions.
+      try {
+        if (child.pid) os.setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL);
+      } catch {
+        // Sans importance : la conversion se fait simplement en priorité normale.
+      }
+      let stderr = '';
+      child.stdout.setEncoding('utf8').on('data', (/** @type {string} */ chunk) => {
+        const seconds = parseProgress(chunk);
+        if (seconds !== null) onProgress?.(seconds);
+      });
+      child.stderr.setEncoding('utf8').on('data', (/** @type {string} */ chunk) => {
+        stderr = (stderr + chunk).slice(-4000); // garde la fin pour le journal
+      });
+      child.on('error', (error) =>
+        reject(new FfmpegError('FFMPEG_NOT_AVAILABLE', `Cannot run ffmpeg: ${error.message}`)),
+      );
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve(stderr);
+          return;
+        }
+        logger.warn(
+          `ffmpeg failed (${code}) for ${input}:\n${stderr.trim().split('\n').slice(-5).join('\n')}`,
+        );
+        reject(new FfmpegError(failure, `ffmpeg exited with code ${code}`));
+      });
+    });
+  }
 
   return {
     /**
@@ -195,36 +303,39 @@ export function createFfmpeg({ ffmpegPath, logger = console }) {
      * @param {(seconds: number) => void} [job.onProgress]  Position atteinte (s).
      * @returns {Promise<void>}
      */
-    convertToH264({ input, output, onProgress }) {
-      return new Promise((resolve, reject) => {
-        const child = spawn(ffmpegPath, buildConvertArgs(input, output), { windowsHide: true });
-        // Priorité basse : le PC reste utilisable pendant une longue série de conversions.
-        try {
-          if (child.pid) os.setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL);
-        } catch {
-          // Sans importance : la conversion se fait simplement en priorité normale.
-        }
-        let stderr = '';
-        child.stdout.setEncoding('utf8').on('data', (/** @type {string} */ chunk) => {
-          const seconds = parseProgress(chunk);
-          if (seconds !== null) onProgress?.(seconds);
-        });
-        child.stderr.setEncoding('utf8').on('data', (/** @type {string} */ chunk) => {
-          stderr = (stderr + chunk).slice(-4000); // garde la fin pour le journal
-        });
-        child.on('error', (error) =>
-          reject(new FfmpegError('FFMPEG_NOT_AVAILABLE', `Cannot run ffmpeg: ${error.message}`)),
-        );
-        child.on('close', (code) => {
-          if (code === 0) resolve();
-          else {
-            logger.warn(
-              `ffmpeg failed (${code}) for ${input}:\n${stderr.trim().split('\n').slice(-5).join('\n')}`,
-            );
-            reject(new FfmpegError('VIDEO_CONVERSION_FAILED', `ffmpeg exited with code ${code}`));
-          }
-        });
+    convertToH264: async ({ input, output, onProgress }) => {
+      await run(buildConvertArgs(input, output), {
+        input,
+        onProgress,
+        failure: 'VIDEO_CONVERSION_FAILED',
       });
+    },
+
+    /**
+     * Extrait la piste audio en MP3 (voir buildExtractAudioArgs).
+     * @param {object} job
+     * @param {string} job.input
+     * @param {string} job.output
+     * @returns {Promise<void>}
+     */
+    extractAudioToMp3: async ({ input, output }) => {
+      await run(buildExtractAudioArgs(input, output), {
+        input,
+        failure: 'AUDIO_EXTRACTION_FAILED',
+      });
+    },
+
+    /**
+     * Mesure le ReplayGain d'un fichier audio (filtre « replaygain », référence 89 dB comme
+     * MP3Gain). Le fichier n'est que lu.
+     * @param {string} input
+     * @returns {Promise<{ trackGain: number, trackPeak: number }>}
+     */
+    async analyzeReplayGain(input) {
+      const output = await run(buildReplayGainArgs(input), { input, failure: 'REPLAYGAIN_FAILED' });
+      const result = parseReplayGainOutput(output);
+      if (!result) throw new FfmpegError('REPLAYGAIN_FAILED', 'ffmpeg gave no ReplayGain values');
+      return result;
     },
   };
 }

@@ -123,7 +123,14 @@ export function createSongsController(catalog, editor, videos) {
         res.status(404).json({ error: SONG_NOT_FOUND });
         return;
       }
-      res.json({ data: { song, details: { ...details, video: await videos.describe(song) } } });
+      // ReplayGain : lu au scan du catalogue (relu après chaque modification).
+      const [video, ffmpeg] = await Promise.all([
+        videos.describe(song),
+        videos.isFfmpegAvailable(),
+      ]);
+      res.json({
+        data: { song, details: { ...details, video, replayGain: song.replayGain, ffmpeg } },
+      });
     },
 
     /**

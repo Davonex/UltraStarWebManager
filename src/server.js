@@ -8,9 +8,16 @@ import { createApp } from './app.js';
 import { isLoopbackHost, loadConfig } from './config/index.js';
 import { createCatalog } from './services/catalogService.js';
 import { createFacetImages } from './services/facetImageService.js';
+import { createSettings } from './services/settingsService.js';
 
 const config = loadConfig();
-const catalog = createCatalog({ songDir: config.songDir });
+// Préférences d'abord : le catalogue en a besoin (modèles de nommage des avertissements).
+const settings = createSettings({ file: config.settingsFile });
+await settings.load();
+const catalog = createCatalog({
+  songDir: config.songDir,
+  getNaming: () => settings.get().naming,
+});
 const facetImages = createFacetImages({ dir: config.categoryCoversDir });
 await facetImages.load();
 
@@ -20,7 +27,7 @@ if (config.songDir) {
   console.warn('SONG_DIR is not set: copy .env.example to .env');
 }
 
-const app = createApp(config, { catalog, facetImages });
+const app = createApp(config, { catalog, facetImages, settings });
 
 const server = app.listen(config.port, config.host, () => {
   console.info(`UltraStarWebManager listening on http://${config.host}:${config.port}`);

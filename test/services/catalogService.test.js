@@ -58,7 +58,16 @@ describe('catalogService', () => {
       background: null,
       video: null,
     });
-    assert.deepEqual(zen.warnings, []);
+    // Fichiers audio d'exemple vides (pas de ReplayGain) ; pochette sans « [CO] »
+    assert.deepEqual(
+      zen.warnings.map((w) => w.code),
+      ['NAMING_COVER', 'REPLAYGAIN_MISSING'],
+    );
+    assert.deepEqual(zen.warnings[0].params, {
+      file: 'Zazie - Zen.jpg',
+      expected: 'Zazie - Zen [CO].jpg',
+    });
+    assert.equal(zen.replayGain, null);
     assert.equal(zen.videoGap, 0, 'sans #VIDEOGAP : 0');
   });
 
@@ -78,7 +87,11 @@ describe('catalogService', () => {
     assert.equal(duo.isDuet, true);
     assert.equal(duo.files.video, null);
     assert.deepEqual(
-      duo.warnings.filter((w) => w.code !== 'MISSING_HEADER'),
+      duo.warnings.filter(
+        (w) =>
+          !['MISSING_HEADER', 'REPLAYGAIN_MISSING'].includes(w.code) &&
+          !w.code.startsWith('NAMING_'),
+      ),
       [
         {
           code: 'MISSING_FILE',
@@ -243,6 +256,43 @@ describe('catalogService — vidéo qui sert aussi de musique', () => {
           ?.warnings.find((w) => w.code === 'VIDEO_IS_AUDIO');
       assert.deepEqual(warning('Même')?.params, { file: 'clip.mp4' });
       assert.equal(warning('Séparé'), undefined);
+    } finally {
+      await library.cleanup();
+    }
+  });
+});
+
+describe('catalogService — ReplayGain', () => {
+  it('MP3 sans tag : avertissement ; MP3 tagué : valeurs ; autre format : rien', async () => {
+    const { songTxt } = await import('../helpers/songLibrary.js');
+    const value = '-6.50 dB';
+    const head = Buffer.alloc(8);
+    head.writeUInt32LE(value.length, 0);
+    const items = Buffer.concat([head, Buffer.from('REPLAYGAIN_TRACK_GAIN\0'), Buffer.from(value)]);
+    const footer = Buffer.alloc(32);
+    footer.write('APETAGEX', 0, 'latin1');
+    footer.writeUInt32LE(items.length + 32, 12);
+    /** @param {string} title @param {string} audio */
+    const txt = (title, audio) => songTxt({ TITLE: title, ARTIST: 'A', MP3: audio, BPM: '300' });
+    const library = await createSongLibrary({
+      'sans/a.txt': txt('Sans', 'a.mp3'),
+      'sans/a.mp3': Buffer.alloc(500, 0xff),
+      'avec/a.txt': txt('Avec', 'a.MP3'),
+      'avec/a.MP3': Buffer.concat([Buffer.alloc(500, 0xff), items, footer]),
+      'm4a/a.txt': txt('M4A', 'a.m4a'),
+      'm4a/a.m4a': 'x',
+    });
+    try {
+      const catalog = createCatalog({ songDir: library.root, logger: silentLogger });
+      await catalog.load();
+      /** @param {string} title */
+      const get = (title) => catalog.getSongs().find((s) => s.title === title);
+      /** @param {string} title */
+      const flagged = (title) => get(title)?.warnings.some((w) => w.code === 'REPLAYGAIN_MISSING');
+      assert.equal(flagged('Sans'), true);
+      assert.equal(flagged('Avec'), false);
+      assert.equal(get('Avec')?.replayGain?.trackGain, -6.5);
+      assert.equal(flagged('M4A'), false);
     } finally {
       await library.cleanup();
     }

@@ -17,6 +17,9 @@ import { createAuth } from './services/authService.js';
 import { createFfmpeg } from './services/ffmpegService.js';
 import { createMusicBrainz } from './services/musicBrainzService.js';
 import { createPlaylists } from './services/playlistService.js';
+import { createRenamer } from './services/renameService.js';
+import { createReplayGainTool } from './services/replayGainService.js';
+import { createSettings } from './services/settingsService.js';
 import { createSongEditor } from './services/songEditService.js';
 import { createVideoConverter } from './services/videoConvertService.js';
 
@@ -34,6 +37,8 @@ const bootstrapDir = path.join(
  * @property {import('./services/ffmpegService.js').Ffmpeg} [ffmpeg]  Par défaut : FFMPEG_PATH.
  * @property {import('./services/playlistService.js').Playlists} [playlists]  Par défaut : PLAYLIST_DIR.
  * @property {import('./services/musicBrainzService.js').MusicBrainz} [musicBrainz]  Par défaut : API publique.
+ * @property {import('./services/settingsService.js').SettingsStore} [settings]  Par défaut : SETTINGS_FILE
+ *   (non relu ici : server.js le charge avant le catalogue).
  */
 
 /**
@@ -44,11 +49,24 @@ const bootstrapDir = path.join(
 export function createApp(config, deps) {
   const auth = createAuth({ accessKeys: config.accessKeys, sessionDays: config.sessionDays });
   const editor = createSongEditor({ catalog: deps.catalog, backupDir: config.backupDir });
+  const ffmpeg = deps.ffmpeg ?? createFfmpeg({ ffmpegPath: config.ffmpegPath });
   const videos = createVideoConverter({
     catalog: deps.catalog,
     editor,
-    ffmpeg: deps.ffmpeg ?? createFfmpeg({ ffmpegPath: config.ffmpegPath }),
+    ffmpeg,
     backupDir: config.backupDir,
+  });
+  const replayGain = createReplayGainTool({
+    catalog: deps.catalog,
+    ffmpeg,
+    backupDir: config.backupDir,
+  });
+  const settings = deps.settings ?? createSettings({ file: config.settingsFile });
+  const renamer = createRenamer({
+    catalog: deps.catalog,
+    songDir: config.songDir,
+    backupDir: config.backupDir,
+    getNaming: () => settings.get().naming,
   });
   const app = express();
   app.disable('x-powered-by');
@@ -79,6 +97,9 @@ export function createApp(config, deps) {
       auth,
       editor,
       videos,
+      replayGain,
+      settings,
+      renamer,
     }),
   );
   app.use('/api', (_req, res) => {
@@ -110,6 +131,15 @@ function errorHandler(err, _req, res, _next) {
     res
       .status(status)
       .json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+    return;
+  }
+  const code = /** @type {NodeJS.ErrnoException} */ (err)?.code;
+  if (code && ['EPERM', 'EBUSY', 'EACCES'].includes(code)) {
+    // Fichier verrouillé ou en lecture seule : message clair plutôt qu'une erreur interne.
+    console.warn(`File locked or read-only (${code}): ${/** @type {Error} */ (err).message}`);
+    res.status(423).json({
+      error: { code: 'FILE_LOCKED', message: 'The file is locked or read-only' },
+    });
     return;
   }
   console.error(err);

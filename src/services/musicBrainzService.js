@@ -10,6 +10,7 @@
  *
  * @module services/musicBrainzService
  */
+import { APP_VERSION } from '../config/index.js';
 import {
   buildRecordingQuery,
   buildSuggestion,
@@ -48,7 +49,7 @@ export class MusicBrainzError extends Error {
  */
 export function createMusicBrainz({
   fetch: fetchImpl = globalThis.fetch,
-  userAgent = 'UltraStarWebManager/0.1 ( https://github.com/Davonex/UltraStarWebManager )',
+  userAgent = `UltraStarWebManager/${APP_VERSION} ( https://github.com/Davonex/UltraStarWebManager )`,
   minIntervalMs = MIN_INTERVAL_MS,
   logger = console,
 } = {}) {

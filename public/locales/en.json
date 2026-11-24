@@ -37,7 +37,8 @@
     "withWarnings": "Warnings",
     "videos": "Videos",
     "videosHint": "Play song videos (muted) with the preview",
-    "playlist": "Playlists"
+    "playlist": "Playlists",
+    "allWarnings": "All warnings"
   },
   "songs": {
     "shown": {
@@ -88,7 +89,19 @@
     "MUSICBRAINZ_NO_QUERY": "The artist and title are needed to search MusicBrainz.",
     "PLAYLIST_NOT_FOUND": "Playlist not found.",
     "PLAYLIST_CHANGED": "The playlist was changed elsewhere: reopen the menu and try again.",
-    "PLAYLIST_READ_ONLY": "Playlists cannot be changed (no backup folder)."
+    "PLAYLIST_READ_ONLY": "Playlists cannot be changed (no backup folder).",
+    "AUDIO_NOT_SHARED": "The music is already a separate file.",
+    "AUDIO_EXTRACTION_FAILED": "The MP3 could not be created: nothing was changed.",
+    "REPLAYGAIN_FAILED": "The ReplayGain could not be measured.",
+    "REPLAYGAIN_NOT_MP3": "ReplayGain can only be written to MP3 files.",
+    "REPLAYGAIN_TAG_UNSUPPORTED": "This MP3 has an ID3 tag that cannot be changed safely: nothing was written.",
+    "FILE_LOCKED": "The file is used by another program or is read-only (player, UltraStar, synchronisation, antivirus…): nothing was changed. Close it and try again.",
+    "INVALID_SETTINGS": "Invalid preferences.",
+    "FOLDER_CHANGED": "The folder changed since the simulation: the list was computed again, check it and try again.",
+    "RENAME_CONFLICT": "Some names are invalid.",
+    "RENAME_TARGET_EXISTS": "\"{file}\" already exists: nothing was changed.",
+    "RENAME_NOT_FOUND": "Rename not found.",
+    "RENAME_ALREADY_UNDONE": "This rename was already undone."
   },
   "warnings": {
     "MISSING_HEADER": "Missing or invalid #{header} header",
@@ -102,7 +115,16 @@
     "ENCODING_UTF8_BOM": "UTF-8 with BOM: UTF-8 without BOM expected",
     "VIDEO_NOT_H264": "Video {format}: MP4 H.264 recommended",
     "VIDEO_IS_AUDIO": "Same file for the music and the video: {file}",
-    "VIDEO_TOO_LARGE": "Video {width}×{height}: larger than 1080p, heavy for UltraStar (1080p is enough)"
+    "VIDEO_TOO_LARGE": "Video {width}×{height}: larger than 1080p, heavy for UltraStar (1080p is enough)",
+    "REPLAYGAIN_MISSING": "No ReplayGain in {file}",
+    "NAMING_FOLDER": "Folder name: “{expected}” expected",
+    "NAMING_TXT": "Song file name: {file} → {expected}",
+    "NAMING_AUDIO": "Audio file name: {file} → {expected}",
+    "NAMING_VIDEO": "Video file name: {file} → {expected}",
+    "NAMING_COVER": "Cover file name: {file} → {expected}",
+    "NAMING_BACKGROUND": "Background file name: {file} → {expected}",
+    "NAMING_VOCALS": "Vocals file name: {file} → {expected}",
+    "NAMING_INSTRUMENTAL": "Instrumental file name: {file} → {expected}"
   },
   "player": {
     "playSong": "Play preview of {title}",
@@ -184,7 +206,14 @@
     "videoFormat": "Video format",
     "recommended": "recommended",
     "fps": "{value} fps",
-    "oversized": "larger than 1080p"
+    "oversized": "larger than 1080p",
+    "replayGainNone": "none",
+    "replayGainTrack": "Track",
+    "replayGainAlbum": "Album",
+    "replayGainPeak": "peak {value}",
+    "singer1": "Singer 1 (P1)",
+    "singer2": "Singer 2 (P2)",
+    "namingTitle": "Names do not follow the rules"
   },
   "edit": {
     "placeholder": "Add… (Enter)",
@@ -194,7 +223,8 @@
     "empty": "(empty)",
     "dblclickHint": "Double-click to edit",
     "editField": "Edit {field}",
-    "savedField": "{field} saved: {before} → {after}. Backup: {backup}"
+    "savedField": "{field} saved: {before} → {after}. Backup: {backup}",
+    "yearPlaceholder": "YYYY"
   },
   "encoding": {
     "convert": "Convert to UTF-8",
@@ -251,7 +281,7 @@
       "stopping": "Stopping after the current video…",
       "summary": "Batch finished: {converted} converted, {errors} error(s).",
       "stopped": "Batch stopped: {converted} converted, {errors} error(s), {skipped} not processed.",
-      "isAudio": "also the audio file (#MP3): not converted"
+      "isAudio": "also the music (#MP3): create the MP3 from the details window first"
     }
   },
   "video": {
@@ -266,7 +296,7 @@
     "runningUnknown": "Converting…",
     "done": "Video converted: {file}. Original saved in the backups: {backup}",
     "unavailable": "ffmpeg not found: set FFMPEG_PATH in .env to enable conversion.",
-    "isAudio": "The video file is also the song’s audio (#MP3): converting it would remove the music. Not converted: handle it manually."
+    "isAudio": "The video file is also the song’s music: create the MP3 file first (warning above), then the video can be converted."
   },
   "musicbrainz": {
     "title": "MusicBrainz",
@@ -298,5 +328,131 @@
       "other": "{count} songs"
     },
     "readOnly": "Sign in with write access to add or remove this song."
+  },
+  "audio": {
+    "create": "Create the MP3 file",
+    "hint": "Extracts the music from the video into its own MP3 file (the video is not changed), then the video can be converted.",
+    "plan": "{to} will be created from the soundtrack of {from}; #AUDIO / #MP3 will point to it. The video is not changed.",
+    "start": "Create",
+    "done": "MP3 created: {file} ({headers} updated). Backup: {backup}",
+    "planReuse": "{to} already exists (created for another version of this song): #AUDIO / #MP3 will point to it.",
+    "doneReuse": "Music now points to the existing {file} ({headers} updated). Backup: {backup}"
+  },
+  "replayGain": {
+    "measure": "Calculate the ReplayGain",
+    "measuring": "Analysing the song…",
+    "hint": "ffmpeg measures the song (89 dB reference, like MP3Gain); you confirm before anything is written. Only the ID3 tag changes, not the sound.",
+    "measured": "Measured: track gain {gain}, peak {peak}.",
+    "write": "Write to the MP3",
+    "written": "ReplayGain written to the MP3 (ID3 tag). Backup: {backup}"
+  },
+  "warningTypes": {
+    "MISSING_HEADER": "Header #{header} missing or invalid",
+    "DUPLICATE_HEADER": "Header #{header} duplicated",
+    "MALFORMED_HEADER": "Malformed header",
+    "UNKNOWN_LINE": "Unrecognised line",
+    "NO_NOTES": "No notes",
+    "MISSING_END": "End line “E” missing",
+    "MISSING_FILE": "File not found: {kind}",
+    "ENCODING_NOT_UTF8": "Encoding other than UTF-8",
+    "ENCODING_UTF8_BOM": "UTF-8 with BOM",
+    "VIDEO_NOT_H264": "Video not MP4 H.264",
+    "VIDEO_TOO_LARGE": "Video larger than 1080p",
+    "VIDEO_IS_AUDIO": "Same file for music and video",
+    "REPLAYGAIN_MISSING": "No ReplayGain",
+    "NAMING": "File naming"
+  },
+  "preferences": {
+    "title": "Preferences",
+    "namingTitle": "File naming",
+    "namingIntro": "Expected name of each item. Use {artist} and {title} (from #ARTIST and #TITLE); the extension is not checked. Untick an item to stop checking it.",
+    "item": "Item",
+    "pattern": "Pattern",
+    "preview": "Example",
+    "patternOf": "Pattern of {item}",
+    "notChecked": "not checked",
+    "defaults": "Default values",
+    "save": "Save",
+    "saved": "Preferences saved: the library was re-read with the new patterns.",
+    "invalid": "A pattern is invalid: see the field in red.",
+    "kinds": {
+      "folder": "Folder",
+      "txt": "Song file",
+      "duet": "Duet song file",
+      "audio": "Audio",
+      "video": "Video",
+      "cover": "Cover",
+      "background": "Background",
+      "vocals": "Vocals",
+      "instrumental": "Instrumental"
+    },
+    "errors": {
+      "PATTERN_EMPTY": "Enter a pattern.",
+      "PATTERN_TOO_LONG": "Pattern too long (200 characters at most).",
+      "PATTERN_NO_PLACEHOLDER": "Use {artist} and/or {title}.",
+      "PATTERN_UNKNOWN_PLACEHOLDER": "Only {artist} and {title} can be used.",
+      "PATTERN_FORBIDDEN_CHARACTER": "Characters \\ / : * ? \" < > | are not allowed in file names."
+    }
+  },
+  "rename": {
+    "open": "Rename to the naming rules",
+    "title": "Rename to the naming rules",
+    "intro": "The folder and all its files, with the name suggested by the naming rules (Preferences). Every name can be edited, even a compliant one. Files used by no .txt have no suggested name: they only change if you rename them.",
+    "current": "Current name",
+    "newName": "New name",
+    "newNameOf": "New name of {name}",
+    "reset": "Back to the suggested name",
+    "sharedBy": {
+      "one": "used by {count} .txt file",
+      "other": "used by {count} .txt files"
+    },
+    "txtTitle": "Changes to the .txt files",
+    "noTxtChange": "No .txt file to change.",
+    "onlyName": "Only the file name changes.",
+    "unencodable": "\"{character}\" cannot be written in {txtFile} (Windows-1252 encoding): convert this file to UTF-8 first.",
+    "summary": {
+      "one": "{count} item to rename",
+      "other": "{count} items to rename"
+    },
+    "summaryConflicts": {
+      "one": "{count} conflict to solve",
+      "other": "{count} conflicts to solve"
+    },
+    "apply": {
+      "one": "Rename {count} item",
+      "other": "Rename {count} items"
+    },
+    "cancel": "Cancel",
+    "done": {
+      "one": "Done: {count} item renamed.",
+      "other": "Done: {count} items renamed."
+    },
+    "backups": "Backup of the changed .txt files: {files}",
+    "undo": "Undo this rename",
+    "undone": "Rename undone: the original names and .txt files are back.",
+    "reopened": "Renamed.",
+    "noIdentity": "#ARTIST or #TITLE is missing: no name can be suggested, but you can type one.",
+    "kinds": {
+      "folder": "Folder",
+      "other": "Other file"
+    },
+    "status": {
+      "conflict": "Conflict",
+      "ignored": "Not used",
+      "rename": "Renamed",
+      "ok": "Compliant",
+      "kept": "Unchanged"
+    },
+    "errors": {
+      "EMPTY": "Enter a name.",
+      "FORBIDDEN_CHARACTER": "Forbidden characters: \\ / : * ? \" < > |",
+      "TRAILING_DOT_OR_SPACE": "A name cannot end with a dot or a space.",
+      "RESERVED_NAME": "Name reserved by Windows (CON, NUL, COM1…).",
+      "TOO_LONG": "Name too long (200 characters at most).",
+      "EXTENSION_CHANGED": "The extension cannot change.",
+      "DUPLICATE": "Another file already has this name.",
+      "EXISTS": "A folder already has this name."
+    },
+    "short": "Rename"
   }
 }

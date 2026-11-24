@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  ANY_WARNING,
   criteriaFromParams,
   criteriaToParams,
   defaultCriteria,
@@ -11,6 +12,7 @@ import {
   normalizeText,
   sortSongs,
   toggleFacetValue,
+  warningType,
 } from '../../public/js/songFilters.js';
 
 /**
@@ -144,22 +146,66 @@ describe('filterSongs', () => {
   });
 });
 
-describe('filtre « avertissements »', () => {
-  it('ne garde que les chansons avec au moins un avertissement', () => {
-    const withWarning = song({
-      title: 'Abîmée',
-      warnings: [{ code: 'MISSING_END', message: 'Missing end line "E"' }],
-    });
-    const list = [...SONGS, withWarning];
-    assert.deepEqual(titles(filterSongs(list, criteria({ warnings: true }))), ['Abîmée']);
-    assert.equal(filterSongs(list, criteria({})).length, list.length);
-    assert.equal(hasActiveFilter(criteria({ warnings: true })), true);
+describe('filtre « avertissements » par type', () => {
+  const abimee = song({
+    title: 'Abîmée',
+    warnings: [
+      { code: 'MISSING_END', message: 'Missing end line "E"' },
+      { code: 'MISSING_HEADER', message: '', params: { header: 'YEAR' } },
+    ],
+  });
+  const sansFichier = song({
+    title: 'Sans fichier',
+    warnings: [{ code: 'MISSING_FILE', message: '', params: { kind: 'video', file: 'v.mp4' } }],
+  });
+  const list = [...SONGS, abimee, sansFichier];
+
+  it('type d’un avertissement : code, précisé pour les en-têtes et fichiers', () => {
+    assert.equal(warningType(abimee.warnings[0]), 'MISSING_END');
+    assert.equal(warningType(abimee.warnings[1]), 'MISSING_HEADER:YEAR');
+    assert.equal(warningType(sansFichier.warnings[0]), 'MISSING_FILE:video');
+    // Tous les avertissements de nommage dans une seule catégorie
+    for (const code of ['NAMING_FOLDER', 'NAMING_TXT', 'NAMING_COVER']) {
+      assert.equal(warningType({ code, message: '', params: {} }), 'NAMING');
+    }
   });
 
-  it('gardé dans l’URL', () => {
-    const params = criteriaToParams(criteria({ warnings: true }));
-    assert.equal(params.toString(), 'warnings=1');
-    assert.equal(criteriaFromParams(params).warnings, true);
+  it('« Tous » garde toute chanson avec avertissement ; un type, seulement celles-là', () => {
+    assert.deepEqual(titles(filterSongs(list, criteria({ warning: [ANY_WARNING] }))), [
+      'Abîmée',
+      'Sans fichier',
+    ]);
+    assert.deepEqual(titles(filterSongs(list, criteria({ warning: ['MISSING_HEADER:YEAR'] }))), [
+      'Abîmée',
+    ]);
+    assert.deepEqual(
+      titles(filterSongs(list, criteria({ warning: ['MISSING_END', 'MISSING_FILE:video'] }))),
+      ['Abîmée', 'Sans fichier'],
+    );
+    assert.equal(hasActiveFilter(criteria({ warning: [ANY_WARNING] })), true);
+  });
+
+  it('options : « Tous » en tête, puis chaque type avec son nombre de chansons', () => {
+    const options = facetOptions(list, criteria({}), 'warning', 'fr').map(
+      (o) => `${o.value}:${o.count}`,
+    );
+    assert.equal(options[0], '*:2');
+    assert.deepEqual(options.slice(1).sort(), [
+      'MISSING_END:1',
+      'MISSING_FILE:video:1',
+      'MISSING_HEADER:YEAR:1',
+    ]);
+  });
+
+  it('gardé dans l’URL, et ancien lien « ?warnings=1 » compris', () => {
+    const params = criteriaToParams(criteria({ warning: ['MISSING_HEADER:YEAR'] }));
+    assert.equal(params.toString(), 'warning=MISSING_HEADER%3AYEAR');
+    assert.deepEqual(criteriaFromParams(params).warning, ['MISSING_HEADER:YEAR']);
+    assert.deepEqual(criteriaFromParams(new URLSearchParams('warnings=1')).warning, [ANY_WARNING]);
+    assert.deepEqual(
+      criteriaFromParams(new URLSearchParams('warning=NAMING_COVER&warning=NAMING_TXT')).warning,
+      ['NAMING'],
+    );
   });
 });
 

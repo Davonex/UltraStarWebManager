@@ -56,6 +56,50 @@ export function createVideoController(catalog, videos) {
     },
 
     /**
+     * POST /api/songs/:id/extract-audio — crée le MP3 d'une chanson dont la vidéo sert aussi
+     * de musique, et met à jour #AUDIO / #MP3. Corps : `{ expectedModifiedAt, dryRun? }`.
+     * Réponse : `{ data: { plan, song, headers, backup } }` (simulation : rien n'est écrit).
+     *
+     * @param {import('express').Request<{ id: string }>} req
+     * @param {import('express').Response} res
+     */
+    async extractAudio(req, res) {
+      if (catalog.getStatus().state !== 'ready') {
+        res
+          .status(503)
+          .json({ error: { code: 'CATALOG_LOADING', message: 'Song catalog is not ready' } });
+        return;
+      }
+      const { expectedModifiedAt, dryRun } = req.body ?? {};
+      if (
+        typeof expectedModifiedAt !== 'number' ||
+        (dryRun !== undefined && typeof dryRun !== 'boolean')
+      ) {
+        res.status(400).json({
+          error: {
+            code: 'INVALID_REQUEST',
+            message: 'Expected { expectedModifiedAt: number, dryRun?: boolean }',
+          },
+        });
+        return;
+      }
+      try {
+        res.json({
+          data: await videos.extractAudio(req.params.id, { expectedModifiedAt, dryRun }),
+        });
+      } catch (error) {
+        if (!(error instanceof SongEditError)) throw error;
+        res.status(error.status).json({
+          error: {
+            code: error.code,
+            message: error.message,
+            ...(error.params ? { params: error.params } : {}),
+          },
+        });
+      }
+    },
+
+    /**
      * GET /api/songs/:id/convert-video — état de la dernière conversion : `{ data: { job } }`
      * (job null si aucune).
      *

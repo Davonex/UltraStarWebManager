@@ -11,6 +11,7 @@ import {
   ffprobePathFor,
   parseProbeOutput,
   parseProgress,
+  parseReplayGainOutput,
   SCALE_FILTER,
 } from '../../src/services/ffmpegService.js';
 import { probeVideoFile } from '../../src/services/videoProbe.js';
@@ -78,6 +79,15 @@ describe('parseProgress / parseProbeOutput', () => {
   });
 });
 
+describe('parseReplayGainOutput', () => {
+  it('lit gain et crête dans la sortie du filtre replaygain', () => {
+    const out =
+      '[Parsed_replaygain_0 @ 0x1] track_gain = -2.54 dB\n[Parsed_replaygain_0 @ 0x1] track_peak = 0.853360\n';
+    assert.deepEqual(parseReplayGainOutput(out), { trackGain: -2.54, trackPeak: 0.85336 });
+    assert.equal(parseReplayGainOutput('rien'), null);
+  });
+});
+
 describe('createFfmpeg', () => {
   it('programme absent : indisponible, sans exception', async () => {
     const ffmpeg = createFfmpeg({ ffmpegPath: '/chemin/inexistant/ffmpeg', logger: silentLogger });
@@ -130,6 +140,71 @@ describe('createFfmpeg', () => {
         },
       );
       assert.ok(progress.length > 0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('extrait la piste audio d’une vidéo en MP3', { skip: !installed }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'usm-ffmpeg-'));
+    try {
+      const input = path.join(dir, 'clip.mp4');
+      const output = path.join(dir, 'clip.mp3');
+      execFileSync('ffmpeg', [
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc=size=320x240:duration=2',
+        '-f',
+        'lavfi',
+        '-i',
+        'sine=duration=2',
+        '-c:v',
+        'libx264',
+        '-c:a',
+        'aac',
+        '-shortest',
+        input,
+      ]);
+      const ffmpeg = createFfmpeg({ ffmpegPath: 'ffmpeg', logger: silentLogger });
+      await ffmpeg.extractAudioToMp3({ input, output });
+      const probe = execFileSync('ffprobe', [
+        '-v',
+        'error',
+        '-show_entries',
+        'stream=codec_name,codec_type',
+        '-of',
+        'csv=p=0',
+        output,
+      ])
+        .toString()
+        .trim();
+      assert.equal(probe, 'mp3,audio');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('mesure le ReplayGain d’un MP3', { skip: !installed }, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'usm-ffmpeg-'));
+    try {
+      const input = path.join(dir, 'a.mp3');
+      execFileSync('ffmpeg', [
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'sine=frequency=440:duration=3',
+        '-c:a',
+        'libmp3lame',
+        input,
+      ]);
+      const ffmpeg = createFfmpeg({ ffmpegPath: 'ffmpeg', logger: silentLogger });
+      const { trackGain, trackPeak } = await ffmpeg.analyzeReplayGain(input);
+      assert.ok(Number.isFinite(trackGain) && trackPeak > 0 && trackPeak <= 1.5);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

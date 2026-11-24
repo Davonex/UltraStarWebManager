@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { isOversizedVideo, isRecommendedVideo } from '../parsers/mp4Video.js';
+import { checkNaming, DEFAULT_NAMING } from '../parsers/naming.js';
 import {
   beatToSeconds,
   parseNumber,
@@ -21,6 +22,7 @@ import {
 import { mapWithConcurrency } from '../utils/concurrency.js';
 import { resolveInside } from '../utils/safePath.js';
 import { fileNameKey, splitList } from '../utils/text.js';
+import { readReplayGain } from './replayGainService.js';
 import { probeVideoFile } from './videoProbe.js';
 
 /** Nombre de fichiers lus en parallèle. */
@@ -65,6 +67,8 @@ const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
  * @property {boolean} coverGuessed  Pochette trouvée par le marqueur [CO] et non par #COVER.
  * @property {string} encoding
  * @property {import('../parsers/ultrastarTxt.js').SongWarning[]} warnings
+ * @property {import('../parsers/replayGain.js').ReplayGain | null} replayGain  Tags ReplayGain du
+ *   fichier audio (MP3 seulement ; null si absents ou autre format).
  * @property {number} modifiedAt      Date de modification du .txt (ms).
  */
 
@@ -179,9 +183,10 @@ export function songId(relativePath) {
  * @param {string[]} input.fileNames
  * @param {import('../parsers/ultrastarTxt.js').ParsedSong} input.parsed
  * @param {number} input.modifiedAt
+ * @param {import('../parsers/naming.js').NamingRules} [input.naming]  Modèles de nommage.
  * @returns {Song}
  */
-export function buildSong({ relativeDir, txtFile, fileNames, parsed, modifiedAt }) {
+export function buildSong({ relativeDir, txtFile, fileNames, parsed, modifiedAt, naming }) {
   const { meta, stats, encoding } = parsed;
   const filesByKey = new Map(fileNames.map((name) => [fileNameKey(name), name]));
   const warnings = [...parsed.warnings];
@@ -226,6 +231,34 @@ export function buildSong({ relativeDir, txtFile, fileNames, parsed, modifiedAt 
     coverGuessed = files.cover !== null;
   }
 
+  // Nommage des dossiers et fichiers (« Artiste - Titre [suffixe] », voir parsers/naming.js).
+  for (const problem of checkNaming(
+    {
+      artist: meta.artist,
+      title: meta.title,
+      folderName: path.basename(relativeDir),
+      txtFile,
+      isDuet: stats.isDuet,
+      files: {
+        ...files,
+        vocals: findFile(filesByKey, parsed.headers.VOCALS),
+        instrumental: findFile(filesByKey, parsed.headers.INSTRUMENTAL),
+      },
+    },
+    naming,
+  )) {
+    warnings.push(
+      songWarning(
+        `NAMING_${problem.kind}`,
+        `Name "${problem.actual}" should be "${problem.expected}"`,
+        {
+          file: problem.actual,
+          expected: problem.expected,
+        },
+      ),
+    );
+  }
+
   const folder = relativeDir.split(path.sep).join('/');
   return {
     id: songId(path.join(relativeDir, txtFile)),
@@ -246,6 +279,7 @@ export function buildSong({ relativeDir, txtFile, fileNames, parsed, modifiedAt 
     files,
     videoGap: meta.videoGap ?? 0,
     video: null,
+    replayGain: null,
     coverGuessed,
     encoding,
     warnings,
@@ -282,6 +316,27 @@ export function withVideoInfo(song, video) {
     );
   }
   return { ...song, video, warnings };
+}
+
+/** Formats audio dont les tags ReplayGain sont lus (et donc signalés quand ils manquent). */
+export const REPLAYGAIN_EXTENSIONS = Object.freeze(['.mp3']);
+
+/**
+ * Ajoute à une chanson ses tags ReplayGain, avec un avertissement s'ils manquent
+ * (seulement pour les formats lus : MP3).
+ *
+ * @param {Song} song
+ * @param {import('../parsers/replayGain.js').ReplayGain | null} replayGain
+ * @returns {Song}
+ */
+export function withReplayGain(song, replayGain) {
+  const audio = song.files.audio;
+  if (replayGain || !audio) return { ...song, replayGain };
+  if (!REPLAYGAIN_EXTENSIONS.includes(path.extname(audio).toLowerCase())) return song;
+  const warning = songWarning('REPLAYGAIN_MISSING', `No ReplayGain tags in ${audio}`, {
+    file: audio,
+  });
+  return { ...song, replayGain: null, warnings: [...song.warnings, warning] };
 }
 
 /**
@@ -324,8 +379,10 @@ function compareSongs(a, b) {
  * @param {object} options
  * @param {string | null} options.songDir  Dossier racine des chansons (null = non configuré).
  * @param {Pick<Console, 'info' | 'warn' | 'error'>} [options.logger]
+ * @param {() => import('../parsers/naming.js').NamingRules} [options.getNaming]  Modèles de
+ *   nommage en cours (préférences), relus à chaque scan.
  */
-export function createCatalog({ songDir, logger = console }) {
+export function createCatalog({ songDir, logger = console, getNaming = () => DEFAULT_NAMING }) {
   /** @type {Song[]} */
   let songs = [];
   /** @type {Map<string, Song>} */
@@ -357,10 +414,23 @@ export function createCatalog({ songDir, logger = console }) {
       if (!parsed.headers.TITLE && !parsed.headers.ARTIST) {
         return { skipped: 'Not an UltraStar file (no #TITLE / #ARTIST)' };
       }
-      const song = buildSong({ relativeDir, txtFile, fileNames, parsed, modifiedAt: info.mtimeMs });
-      if (!song.files.video) return { song };
-      const video = await probeVideoFile(path.join(root, relativeDir, song.files.video));
-      return { song: withVideoInfo(song, video) };
+      const song = buildSong({
+        relativeDir,
+        txtFile,
+        fileNames,
+        parsed,
+        modifiedAt: info.mtimeMs,
+        naming: getNaming(),
+      });
+      const folder = path.join(root, relativeDir);
+      let result = song;
+      if (song.files.video) {
+        result = withVideoInfo(result, await probeVideoFile(path.join(folder, song.files.video)));
+      }
+      if (song.files.audio) {
+        result = withReplayGain(result, await readReplayGain(path.join(folder, song.files.audio)));
+      }
+      return { song: result };
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) };
     }
@@ -520,6 +590,36 @@ export function createCatalog({ songDir, logger = console }) {
       songs = songs.map((s) => (s.id === id ? updated : s)).sort(compareSongs);
       songsById.set(id, updated);
       return updated;
+    },
+
+    /**
+     * Relit toutes les chansons d'un dossier, après un renommage : les chansons de l'ancien
+     * dossier disparaissent, celles du nouveau sont lues (leurs identifiants changent, car ils
+     * dépendent du chemin).
+     * @param {string} oldFolder  Dossier relatif, séparateur « / ».
+     * @param {string} newFolder
+     * @returns {Promise<Song[]>} Chansons du nouveau dossier.
+     */
+    async replaceFolder(oldFolder, newFolder) {
+      if (!songDir) return [];
+      const root = path.resolve(songDir);
+      const relativeDir = newFolder.split('/').join(path.sep);
+      const entries = await readdir(path.join(root, relativeDir), { withFileTypes: true });
+      const fileNames = entries
+        .filter((e) => e.isFile() && !e.name.startsWith('.'))
+        .map((e) => e.name);
+      const txtFiles = fileNames.filter((name) => path.extname(name).toLowerCase() === '.txt');
+      const results = await Promise.all(
+        txtFiles.map((txtFile) => readSong(root, { relativeDir, fileNames }, txtFile)),
+      );
+      const fresh = results.flatMap((result) => (result.song ? [result.song] : []));
+      songs = [
+        ...songs.filter((s) => s.folder !== oldFolder && s.folder !== newFolder),
+        ...fresh,
+      ].sort(compareSongs);
+      songsById = new Map(songs.map((song) => [song.id, song]));
+      status = { ...status, count: songs.length };
+      return fresh;
     },
 
     /**

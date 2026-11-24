@@ -75,6 +75,7 @@ describe('GET /api/songs/:id — détail', () => {
       assert.deepEqual(details.singers, { p1: 'A', p2: 'B' });
       assert.equal(details.stats.notes, 2);
       assert.equal(details.stats.isDuet, true);
+      assert.equal(details.replayGain, null); // fichier audio sans tag ReplayGain
 
       const missing = await fetch(`${app.baseUrl}/api/songs/inconnu`);
       assert.equal(missing.status, 404);
