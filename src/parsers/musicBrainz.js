@@ -9,6 +9,7 @@
  *
  * @module parsers/musicBrainz
  */
+import { titleWithoutDuetMark } from './naming.js';
 
 /** Codes de langue sans intérêt pour #LANGUAGE (sans paroles, plusieurs, indéterminée). */
 const IGNORED_LANGUAGES = new Set(['zxx', 'mul', 'und', 'mis']);
@@ -31,6 +32,8 @@ const MAX_GENRES = 8;
 
 /**
  * @typedef {object} MbSuggestion  Valeurs proposées pour une chanson.
+ * @property {string | null} artist  Artiste crédité, écriture exacte de MusicBrainz.
+ * @property {string | null} title   Titre de l'enregistrement.
  * @property {number | null} year
  * @property {{ code: string, name: string }[]} languages  Nom au format UltraStar (« French »).
  * @property {string[]} genres     Du plus voté au moins voté, sans doublon.
@@ -45,13 +48,66 @@ function quoted(text) {
 }
 
 /**
- * Requête de recherche d'un enregistrement (titre et artiste).
+ * Requête de recherche d'un enregistrement (titre et artiste), au mot près.
  * @param {string} artist
  * @param {string} title
  * @returns {string}
  */
 export function buildRecordingQuery(artist, title) {
   return `recording:${quoted(title)} AND artist:${quoted(artist)}`;
+}
+
+/**
+ * Mots de liaison entre artistes, absents des noms sur MusicBrainz ou écrits autrement
+ * (« Stone et Charden » y est « Stone & Charden »).
+ */
+const ARTIST_JOIN_WORDS = new Set([
+  'et',
+  'and',
+  'feat',
+  'featuring',
+  'ft',
+  'avec',
+  'with',
+  'vs',
+  'x',
+  'y',
+  'e',
+  'und',
+]);
+
+/**
+ * Mots significatifs d'un nom d'artiste : lettres et chiffres, sans les mots de liaison.
+ * @param {string} artist
+ * @returns {string[]}
+ */
+export function artistWords(artist) {
+  return (artist.match(/[\p{L}\p{N}]+/gu) ?? []).filter(
+    (word) => !ARTIST_JOIN_WORDS.has(word.toLowerCase()),
+  );
+}
+
+/**
+ * Requêtes de recherche, de la plus stricte à la plus large, sans doublon. Le service essaie
+ * la suivante tant qu'il n'a rien trouvé :
+ * 1. titre et artiste au mot près ;
+ * 2. titre sans marque de duo, artiste par mots (tous présents, dans n'importe quel ordre,
+ *    sans « et », « feat. »…) : « Stone et Charden » trouve « Stone & Charden » ;
+ * 3. idem avec au moins un des mots de l'artiste (artiste crédité autrement).
+ *
+ * @param {string} artist
+ * @param {string} title
+ * @returns {string[]}
+ */
+export function buildRecordingQueries(artist, title) {
+  const cleanTitle = titleWithoutDuetMark(title).trim() || title;
+  const words = artistWords(artist);
+  const queries = [buildRecordingQuery(artist, title)];
+  if (words.length > 0) {
+    queries.push(`recording:${quoted(cleanTitle)} AND artist:(${words.join(' AND ')})`);
+    queries.push(`recording:${quoted(cleanTitle)} AND artist:(${words.join(' OR ')})`);
+  }
+  return [...new Set(queries)];
 }
 
 /**
@@ -172,6 +228,11 @@ export function buildSuggestion(recording, { releaseGroup, artist } = {}) {
   }
 
   return {
+    artist: creditText(recording?.['artist-credit']) || null,
+    title:
+      typeof recording?.title === 'string' && recording.title.trim()
+        ? recording.title.trim()
+        : null,
     year: yearOf(recording?.['first-release-date']),
     languages,
     genres: [...genres.values()].slice(0, MAX_GENRES),

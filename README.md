@@ -23,14 +23,15 @@ no build step).
   audio file, statistics, warnings and every other header of the `.txt`.
 - **File checks**: each song lists its problems (missing headers or files, missing year or
   language, missing end line, encoding other than UTF-8 without BOM as required by format 1.1.0,
-  folder or file names not following `Artist - Title [suffix]`…).
+  garbled characters such as `Ã©` instead of `é`, folder or file names not following `Artist - Title [suffix]`…).
 - **Playlists**: the `.upl` files of `PLAYLIST_DIR` become a **Playlists** filter, each one shown
   with a mosaic of its first covers. While a song plays, the **Playlists** button of the bottom bar
   lists them, ticked when they contain the song: tick to add it, untick to remove it (write access).
-- **MusicBrainz** (write access): look up the **year, language and genre** of a song on
+- **MusicBrainz** (write access): look up the exact **artist and title**, the **year, language
+  and genre** of a song on
   [MusicBrainz](https://musicbrainz.org/) and keep the values you choose.
-- **Editing** (write access): double-click a song's **Language, Genre, Year, Edition, Tags,
-  Creator** or, for duets, **singer names (P1 / P2)** in the details window to edit it in place,
+- **Editing** (write access): double-click a song's **Artist, Title, Language, Genre, Year,
+  Edition, Tags, Creator** or, for duets, **singer names (P1 / P2)** in the details window to edit it in place,
   picking existing values or creating new ones; dated backup, original encoding kept.
 - **Bulk corrections** (write access, toolbox button in the top bar): simulate first, pick the
   files, then apply with a progress bar. Tools: convert every file to UTF-8 without BOM; convert
@@ -93,6 +94,9 @@ Paths may contain spaces and parentheses, no quotes needed, e.g.
 the same chip are combined with OR, different chips with AND: _French OR English, AND 1990s_.
 **Duets** and **⚠ Warnings** are on/off toggles; **Reset** clears everything but the sort.
 Next to the sort menu: the **Videos** switch and the **Refresh** button (write access).
+**Sort**: artist, title, year, **Recently added** (creation date of the song folder: a copied
+folder is dated from the copy, even if its files keep their old dates) or **Recently modified**
+(last change of the `.txt`, including changes made by this tool).
 
 **Category images** — With `CATEGORY_COVERS_DIR` set, tiles and details show the UltraStar Deluxe
 images; otherwise initials:
@@ -135,7 +139,9 @@ backup in `BACKUP_DIR/_playlists/`, writes atomically, and is refused if the pla
 elsewhere since the menu was opened.
 
 **MusicBrainz** (write access, needs internet) — In the details window, **Search on MusicBrainz**
-looks up the song by artist and title. Choose the matching recording (album, year and match score
+looks up the song by artist and title: exact words first, then, if nothing is found, the title
+without its duet mark and the artist word by word without join words (`Stone et Charden` finds
+`Stone & Charden`), then any word of the artist. Choose the matching recording (album, year and match score
 shown; a link opens it on musicbrainz.org): the **year** (first release), **languages** (lyrics
 language of its releases, written the UltraStar way: `French`, `English`…) and **genres**
 (community votes on the recording, its album and its artist) are shown next to the current
@@ -144,10 +150,10 @@ ticked values replace `#YEAR`, `#LANGUAGE` and `#GENRE`, with the same safe savi
 server calls MusicBrainz itself (identified User-Agent, at most one request per second, answers
 cached), so the browser page stays under the strict CSP.
 
-**Editing** (write access) — In the details window, **double-click** the value of **Language**,
-**Genre**, **Year**, **Edition**, **Tags**, **Creator** or, for duets, **Singer 1 / Singer 2**
+**Editing** (write access) — In the details window, **double-click** the value of **Artist**,
+**Title**, **Language**, **Genre**, **Year**, **Edition**, **Tags**, **Creator** or, for duets, **Singer 1 / Singer 2**
 (or click the ✏ that appears on hover, always visible on touch screens) to edit it in place.
-Year and singers are a simple text field (Enter saves, Esc cancels; a singer name may contain
+Artist, title, year and singers are a simple text field (Enter saves, Esc cancels; a singer name may contain
 commas; old files using `#DUETSINGERP1` / `#DUETSINGERP2` keep those headers). The other fields
 list the values already used in your library (pick one, keeping its exact spelling) or accept a
 new one: press Enter to add, × to remove. **Save** with ✓ or
@@ -160,10 +166,22 @@ Enter in an empty input; **cancel** with ✕ or Esc. Saving:
    exist in a Windows-1252 file (emoji, Asian scripts…) is refused rather than corrupted;
 4. updates the grid and filters immediately.
 
+**Artist and title** cannot be empty. A change also goes to the other `.txt` files of the folder
+that are the same song (solo, duet…; the duet mark such as `[DUET]` stays on the duet title) and
+to every playlist line `Artist : Title` of the song, each file with its dated backup. Scores
+already saved by UltraStar Deluxe are kept under the old artist and title. Then use **Rename to
+the naming rules** if the folder and file names should follow.
+
 **Encoding fix** (write access) — Format 1.1.0 requires UTF-8 without BOM. When a song is in
 Windows-1252 or has a BOM, its warning in the details window comes with a **Convert to UTF-8**
 button: same safety steps (change check, dated backup, atomic write), same text and line endings;
 the server checks that the new file decodes to exactly the same text before writing it.
+
+**Garbled characters** (write access) — Some files contain text that was saved in UTF-8, read
+back as Windows-1252 and saved again: `Ã ` instead of `à`, `Ã©` instead of `é`, `â€™` instead of
+`’`. The song gets a **Garbled characters** warning (the analysis stops at the end line `E`).
+**Preview the repair** lists every line before and after; **Repair** then writes the file with
+the usual safety steps, keeping its encoding and line endings.
 
 **Video conversion** (write access, needs [ffmpeg](https://ffmpeg.org/), e.g. `winget install ffmpeg`,
 then `FFMPEG_PATH` in `.env`) — The recommended video format is **MP4 H.264**: light to decode
@@ -238,6 +256,10 @@ Tools (one tab each):
   half-converted file. At the end, a summary is shown and the list is simulated again, so the
   next batch is ready. Each video goes through the same safe steps as the conversion from the
   details window. Rough timing with a recent PC: 15–30 s for an SD clip, 1–2 min in 1080p.
+- **Music in the video** — lists the songs whose `#MP3` is the video file and creates their MP3
+  (same steps as **Create the MP3** in the details window), one after the other in the
+  background, with **Stop after the current song**. When a solo and a duet `.txt` share the same
+  video, the MP3 is created once and reused. Only one ffmpeg batch runs at a time.
 
 ## Sharing on the local network
 
@@ -278,6 +300,11 @@ each `.txt` citing a renamed file is updated. The window shows:
   the suggestion) and a status — compliant, renamed, conflict (forbidden character, name already
   taken, extension changed…) or not used (files cited by no `.txt` are never renamed);
 - the changes to each `.txt` (`#MP3`, `#VIDEO`, `#COVER`…), and its new name.
+
+When `#BACKGROUND` is the same image as `#COVER`, the image follows the **cover** rule (`[CO]`, no
+"`[BG]` expected" warning). If the folder has no other image, the `#BACKGROUND` entry is useless:
+the naming warning says so and the rename removes it (**Update N .txt files** when nothing else
+needs renaming).
 
 **Rename** is available once there is no conflict. The preview stops first (Windows locks files
 being read), each changed `.txt` gets its dated backup, files are renamed in two steps (so a
@@ -327,6 +354,7 @@ All responses are JSON: `{ data: … }` on success, `{ error: { code, message } 
 | POST   | `/api/catalog/rescan`                     | write  | Re-reads every `.txt`: `{ data: { count, durationMs, … } }`                                                                                                    |
 | PATCH  | `/api/songs/:id/headers`                  | write  | `{ values: { EDITION, TAGS, CREATOR, YEAR, GENRE, LANGUAGE, P1, P2 }, expectedModifiedAt, dryRun? }` → `{ data: { changes, song, backup } }`                   |
 | POST   | `/api/songs/:id/convert-utf8`             | write  | `{ expectedModifiedAt, dryRun? }` → `{ data: { changed, from, song, backup } }`                                                                                |
+| POST   | `/api/songs/:id/repair-text`              | write  | `{ expectedModifiedAt, dryRun? }` → `{ data: { changes: [{ line, before, after }], song, backup } }`                                                           |
 | POST   | `/api/songs/:id/convert-video`            | write  | `{ expectedModifiedAt, dryRun? }` → `200 { data: { plan } }` (simulation) or `202 { data: { plan, job } }`                                                     |
 | GET    | `/api/songs/:id/convert-video`            | write  | Progress of the last conversion: `{ data: { job } }` (`state`: running, done, error)                                                                           |
 | POST   | `/api/songs/:id/extract-audio`            | write  | Create the MP3 of a video used as music: `{ expectedModifiedAt, dryRun? }` → `{ data: { plan, song, headers, backup } }`                                       |
@@ -334,6 +362,9 @@ All responses are JSON: `{ data: … }` on success, `{ error: { code, message } 
 | POST   | `/api/bulk/convert-video`                 | write  | `{ dryRun: true }` → `{ data: { available, items } }`; `{ items: [{ id, expectedModifiedAt }] }` (≤ 200) → `202 { data: { batch } }`                           |
 | GET    | `/api/bulk/convert-video`                 | write  | Current or last batch: `{ data: { batch } }` (`state`: running, done, stopped)                                                                                 |
 | POST   | `/api/bulk/convert-video/stop`            | write  | Stop the batch after the current video                                                                                                                         |
+| POST   | `/api/bulk/extract-audio`                 | write  | `{ dryRun: true }` → `{ data: { available, items } }`; `{ items: [{ id, expectedModifiedAt }] }` (≤ 200) → `202 { data: { batch } }`                           |
+| GET    | `/api/bulk/extract-audio`                 | write  | Current or last MP3 batch: `{ data: { batch } }`                                                                                                               |
+| POST   | `/api/bulk/extract-audio/stop`            | write  | Stop the MP3 batch after the current song                                                                                                                      |
 | POST   | `/api/bulk/convert-utf8`                  | write  | `{ dryRun: true }` → `{ data: { items } }`; `{ items: [{ id, expectedModifiedAt }] }` (≤ 200) → `{ data: { results } }`                                        |
 
 The `Song` and `SongDetails` formats are described by their `@typedef` in

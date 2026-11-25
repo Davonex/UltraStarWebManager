@@ -22,6 +22,7 @@
     "sortTitle": "Titre",
     "sortYearDesc": "Année récente",
     "sortYearAsc": "Année ancienne",
+    "sortAdded": "Ajoutées récemment",
     "sortRecent": "Modifiées récemment",
     "duetOnly": "Duos",
     "reset": "Réinitialiser",
@@ -78,7 +79,7 @@
     "INVALID_VALUE": "Valeur invalide.",
     "CONVERSION_FAILED": "Échec du contrôle de conversion : le fichier n'a pas été modifié.",
     "FFMPEG_NOT_AVAILABLE": "ffmpeg introuvable : renseignez FFMPEG_PATH dans .env.",
-    "CONVERSION_BUSY": "Une autre vidéo est en cours de conversion : attendez qu’elle se termine.",
+    "CONVERSION_BUSY": "Un autre traitement ffmpeg (conversion vidéo ou création de MP3) est en cours : attendez qu’il se termine.",
     "VIDEO_TARGET_EXISTS": "{file} existe déjà dans le dossier de la chanson : rien n’a été modifié.",
     "VIDEO_ALREADY_H264": "Cette vidéo est déjà en MP4 H.264, 1080p au plus.",
     "VIDEO_CONVERSION_FAILED": "La conversion vidéo a échoué : rien n’a été modifié.",
@@ -101,7 +102,9 @@
     "RENAME_CONFLICT": "Certains noms ne sont pas valides.",
     "RENAME_TARGET_EXISTS": "« {file} » existe déjà : rien n’a été modifié.",
     "RENAME_NOT_FOUND": "Renommage introuvable.",
-    "RENAME_ALREADY_UNDONE": "Ce renommage a déjà été annulé."
+    "RENAME_ALREADY_UNDONE": "Ce renommage a déjà été annulé.",
+    "VALUE_REQUIRED": "Ce champ ne peut pas être vide.",
+    "PLAYLIST_WRITE_FAILED": "La playlist n’a pas pu être mise à jour."
   },
   "warnings": {
     "MISSING_HEADER": "En-tête #{header} manquant ou invalide",
@@ -113,6 +116,7 @@
     "MISSING_FILE": "Fichier introuvable ({kind}) : {file}",
     "ENCODING_NOT_UTF8": "Encodage {encoding} : UTF-8 sans BOM attendu",
     "ENCODING_UTF8_BOM": "UTF-8 avec BOM : UTF-8 sans BOM attendu",
+    "ENCODING_MOJIBAKE": "Caractères mal encodés (ex. « Ã© » au lieu de « é »)",
     "VIDEO_NOT_H264": "Vidéo {format} : MP4 H.264 recommandé",
     "VIDEO_IS_AUDIO": "Même fichier pour la musique et la vidéo : {file}",
     "VIDEO_TOO_LARGE": "Vidéo {width}×{height} : plus grande que 1080p, lourde pour UltraStar (1080p suffit)",
@@ -123,6 +127,7 @@
     "NAMING_VIDEO": "Nom du fichier vidéo : {file} → {expected}",
     "NAMING_COVER": "Nom de la pochette : {file} → {expected}",
     "NAMING_BACKGROUND": "Nom du fond : {file} → {expected}",
+    "NAMING_BACKGROUND_IS_COVER": "Le fond est la même image que la pochette ({file}) et le dossier n’a pas d’autre image : l’entrée #BACKGROUND sera retirée",
     "NAMING_VOCALS": "Nom du fichier voix : {file} → {expected}",
     "NAMING_INSTRUMENTAL": "Nom du fichier instrumental : {file} → {expected}"
   },
@@ -213,7 +218,9 @@
     "replayGainPeak": "crête {value}",
     "singer1": "Chanteur 1 (P1)",
     "singer2": "Chanteur 2 (P2)",
-    "namingTitle": "Nommage non conforme"
+    "namingTitle": "Nommage non conforme",
+    "artist": "Artiste",
+    "songTitle": "Titre"
   },
   "edit": {
     "placeholder": "Ajouter… (Entrée)",
@@ -224,12 +231,29 @@
     "dblclickHint": "Double-cliquez pour modifier",
     "editField": "Modifier {field}",
     "savedField": "{field} enregistré : {before} → {after}. Sauvegarde : {backup}",
-    "yearPlaceholder": "AAAA"
+    "yearPlaceholder": "AAAA",
+    "identityHint": "Aussi appliqué aux autres .txt du dossier (solo, duo…) et aux playlists qui citent la chanson. Les scores déjà enregistrés dans UltraStar restent sous l’ancien nom.",
+    "identityPropagated": "Aussi mis à jour : {txt} autre(s) .txt, {playlists} playlist(s).",
+    "identityFailed": "Non mis à jour (à vérifier) : {files}."
   },
   "encoding": {
     "convert": "Convertir en UTF-8",
     "hint": "Réécrit le fichier en UTF-8 sans BOM : même texte et mêmes fins de ligne, sauvegarde datée avant.",
     "converted": "Fichier converti de {from} en UTF-8 (sans BOM). Sauvegarde : {backup}"
+  },
+  "textRepair": {
+    "show": "Voir la réparation",
+    "hint": "Le texte a été enregistré avec un mauvais encodage. La réparation remet les bons caractères ; rien n'est écrit avant confirmation, sauvegarde datée avant.",
+    "preview": {
+      "one": "{count} ligne sera corrigée :",
+      "other": "{count} lignes seront corrigées :"
+    },
+    "line": "Ligne {line}",
+    "apply": "Réparer",
+    "done": {
+      "one": "{count} ligne corrigée. Sauvegarde : {backup}",
+      "other": "{count} lignes corrigées. Sauvegarde : {backup}"
+    }
   },
   "bulk": {
     "title": "Corrections en masse",
@@ -282,6 +306,27 @@
       "summary": "Lot terminé : {converted} convertie(s), {errors} erreur(s).",
       "stopped": "Lot arrêté : {converted} convertie(s), {errors} erreur(s), {skipped} non traitée(s).",
       "isAudio": "sert aussi de musique (#MP3) : créez d’abord le MP3 depuis la fenêtre info"
+    },
+    "audio": {
+      "tab": "Musique dans la vidéo",
+      "title": "Créer le MP3 des vidéos qui servent de musique",
+      "hint": "Chansons dont le #MP3 est le fichier vidéo. La musique est extraite dans un MP3 à côté de la vidéo, puis #MP3 pointe dessus ; la vidéo n’est pas modifiée (elle pourra ensuite être convertie). Traitement en tâche de fond : vous pouvez fermer cette fenêtre.",
+      "none": "Aucune chanson n’utilise sa vidéo comme musique.",
+      "found": {
+        "one": "{count} chanson utilise sa vidéo comme musique.",
+        "other": "{count} chansons utilisent leur vidéo comme musique."
+      },
+      "target": "MP3 créé",
+      "reuse": "déjà présent : seul le .txt change",
+      "apply": {
+        "one": "Créer le MP3 de {count} chanson",
+        "other": "Créer le MP3 de {count} chansons"
+      },
+      "current": "Chanson {index}/{total} : {song}",
+      "stop": "Arrêter après la chanson en cours",
+      "stopping": "Arrêt après la chanson en cours…",
+      "summary": "Lot terminé : {created} MP3 créé(s), {errors} erreur(s).",
+      "stopped": "Lot arrêté : {created} MP3 créé(s), {errors} erreur(s), {skipped} non traitée(s)."
     }
   },
   "video": {
@@ -300,7 +345,7 @@
   },
   "musicbrainz": {
     "title": "MusicBrainz",
-    "intro": "Cherchez l’année, la langue et le genre de cette chanson sur MusicBrainz, puis choisissez ce qu’il faut garder.",
+    "intro": "Cherchez l’écriture exacte de l’artiste et du titre, l’année, la langue et le genre de cette chanson sur MusicBrainz, puis choisissez ce qu’il faut garder.",
     "searching": "Recherche sur MusicBrainz…",
     "choose": "Choisissez l’enregistrement qui correspond :",
     "loading": "Lecture du détail…",
@@ -318,7 +363,8 @@
     "otherResult": "Autre résultat",
     "cancel": "Annuler",
     "saved": "Valeurs MusicBrainz enregistrées. Sauvegarde : {backup}",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "same": "identique"
   },
   "playlists": {
     "title": "Playlists",
@@ -356,6 +402,7 @@
     "MISSING_FILE": "Fichier introuvable : {kind}",
     "ENCODING_NOT_UTF8": "Encodage autre que UTF-8",
     "ENCODING_UTF8_BOM": "UTF-8 avec BOM",
+    "ENCODING_MOJIBAKE": "Caractères mal encodés",
     "VIDEO_NOT_H264": "Vidéo pas en MP4 H.264",
     "VIDEO_TOO_LARGE": "Vidéo plus grande que 1080p",
     "VIDEO_IS_AUDIO": "Même fichier pour la musique et la vidéo",
@@ -414,6 +461,10 @@
       "one": "{count} élément à renommer",
       "other": "{count} éléments à renommer"
     },
+    "summaryTxt": {
+      "one": "{count} fichier .txt à mettre à jour",
+      "other": "{count} fichiers .txt à mettre à jour"
+    },
     "summaryConflicts": {
       "one": "{count} conflit à résoudre",
       "other": "{count} conflits à résoudre"
@@ -421,6 +472,10 @@
     "apply": {
       "one": "Renommer {count} élément",
       "other": "Renommer {count} éléments"
+    },
+    "applyTxt": {
+      "one": "Mettre à jour {count} fichier .txt",
+      "other": "Mettre à jour {count} fichiers .txt"
     },
     "cancel": "Annuler",
     "done": {

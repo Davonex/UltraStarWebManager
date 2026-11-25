@@ -209,3 +209,43 @@ describe('renameService', () => {
     }
   });
 });
+
+describe('renameService — fond = pochette, seule image du dossier', () => {
+  it('aucun fichier à renommer : seul #BACKGROUND est retiré du .txt (sauvegarde, annulable)', async () => {
+    const text =
+      '#TITLE:Easy\n#ARTIST:Phil\n#MP3:Phil - Easy.mp3\n#COVER:Phil - Easy [CO].jpg\n' +
+      '#BACKGROUND:Phil - Easy [CO].jpg\n#BPM:300\n: 0 4 0 la\nE\n';
+    const dir = await createSongLibrary({
+      'lib/Phil - Easy/Phil - Easy.txt': text,
+      'lib/Phil - Easy/Phil - Easy.mp3': 'audio',
+      'lib/Phil - Easy/Phil - Easy [CO].jpg': 'image',
+    });
+    try {
+      const songDir = path.join(dir.root, 'lib');
+      const catalog = createCatalog({ songDir, logger: silentLogger });
+      await catalog.load();
+      const [song] = catalog.getSongs();
+      const naming = (/** @type {typeof song} */ s) =>
+        s.warnings.map((w) => w.code).filter((code) => code.startsWith('NAMING_'));
+      assert.deepEqual(naming(song), ['NAMING_BACKGROUND_IS_COVER']);
+      const renamer = createRenamer({
+        catalog,
+        songDir,
+        backupDir: path.join(dir.root, 'backups'),
+        getNaming: () => DEFAULT_NAMING,
+        logger: silentLogger,
+      });
+      const plan = await renamer.preview(song.id);
+      assert.equal(plan.renameCount, 0);
+      const result = await renamer.apply(song.id, { expected: plan.expected });
+      const file = path.join(songDir, 'Phil - Easy/Phil - Easy.txt');
+      assert.doesNotMatch(await readFile(file, 'utf8'), /#BACKGROUND/);
+      assert.deepEqual(naming(catalog.getSongs()[0]), []);
+      assert.ok(result.journal);
+      await renamer.undo(/** @type {string} */ (result.journal));
+      assert.equal(await readFile(file, 'utf8'), text);
+    } finally {
+      await dir.cleanup();
+    }
+  });
+});

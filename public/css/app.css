@@ -725,6 +725,18 @@ summary.details-heading {
   gap: 0.25rem;
 }
 
+/* Avertissement sous la saisie de l'artiste ou du titre */
+.details-inline-hint {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+/* Artiste ou titre en cours de modification : la ligne prend toute la largeur */
+.details-row:has(.details-inline-hint) {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(7.5rem, 20%) 1fr;
+}
+
 .chips-input {
   display: flex;
   flex-wrap: wrap;
@@ -918,6 +930,12 @@ summary.details-heading {
 .rename-diff-add {
   color: var(--bs-success-text-emphasis);
   background-color: var(--bs-success-bg-subtle);
+}
+
+/* Aperçu de la réparation du texte : défile s'il y a beaucoup de lignes */
+.text-repair-diff {
+  max-height: 16rem;
+  overflow-y: auto;
 }
 
 .details-naming {

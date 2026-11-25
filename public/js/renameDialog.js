@@ -330,16 +330,24 @@ export function createRenameDialog({ modal, onBeforeApply, onClosed }) {
     footer.append(button(t('rename.cancel'), 'btn-outline-secondary', () => bootstrapModal.hide()));
     if (!plan) return;
     const errors = plan.errorCount;
+    // Aucun renommage mais des .txt à corriger (ex. #BACKGROUND retiré) : on met à jour les .txt.
+    const txtOnly =
+      plan.renameCount === 0 ? plan.txts.filter((x) => x.changes.length > 0).length : 0;
     summary.textContent = errors
       ? t('rename.summaryConflicts', { count: errors })
-      : t('rename.summary', { count: plan.renameCount });
+      : txtOnly > 0
+        ? t('rename.summaryTxt', { count: txtOnly })
+        : t('rename.summary', { count: plan.renameCount });
     const apply = button(
-      t('rename.apply', { count: plan.renameCount }),
+      txtOnly > 0
+        ? t('rename.applyTxt', { count: txtOnly })
+        : t('rename.apply', { count: plan.renameCount }),
       'btn-primary',
       () => applyPlan(),
       'input-cursor-text',
     );
-    apply.disabled = pending || state.phase !== 'ready' || errors > 0 || plan.renameCount === 0;
+    apply.disabled =
+      pending || state.phase !== 'ready' || errors > 0 || (plan.renameCount === 0 && txtOnly === 0);
     footer.append(apply);
   }
 

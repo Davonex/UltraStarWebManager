@@ -83,7 +83,19 @@ const MTIME_TOLERANCE_MS = 1;
  */
 
 /**
- * @typedef {object} VideoBatch  Lot de conversions (un seul à la fois).
+ * @typedef {object} AudioCandidate  Chanson dont la vidéo sert aussi de musique (simulation en masse).
+ * @property {string} id
+ * @property {string | null} artist
+ * @property {string | null} title
+ * @property {string} file       « dossier/vidéo ».
+ * @property {string} target     Nom du MP3 qui sera créé (ou réutilisé).
+ * @property {boolean} reuse     Le MP3 existe déjà : seul le .txt change.
+ * @property {number} modifiedAt Date du .txt (contrôle « modifié entre-temps »).
+ */
+
+/**
+ * @typedef {object} VideoBatch  Lot de traitements ffmpeg (un seul à la fois).
+ * @property {'video' | 'audio'} kind  Conversion des vidéos, ou création des MP3.
  * @property {'running' | 'done' | 'stopped'} state
  * @property {boolean} stopRequested
  * @property {number} startedAt
@@ -93,8 +105,9 @@ const MTIME_TOLERANCE_MS = 1;
 
 /**
  * @typedef {Omit<VideoBatch, 'items'> & {
- *   items: (VideoBatchItem & { expectedModifiedAt: number })[] }} InternalBatch
- *   Lot gardé en mémoire : chaque élément garde la date attendue du .txt (non renvoyée).
+ *   items: (VideoBatchItem & { expectedModifiedAt: number, video: string | null })[] }} InternalBatch
+ *   Lot gardé en mémoire : chaque élément garde la date attendue du .txt et sa vidéo au
+ *   lancement, « dossier/fichier » en minuscules (non renvoyées).
  */
 
 /**
@@ -184,6 +197,37 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
   }
 
   /**
+   * Autres .txt du même dossier (duo, instrumental…) qui utilisent la vidéo convertie : leur
+   * #VIDEO pointe aussi vers la nouvelle vidéo (sauvegarde datée de chacun).
+   *
+   * @param {import('./catalogService.js').Song} song
+   * @param {{ sourceName: string, targetName: string }} plan
+   * @returns {Promise<boolean>}  true si l'original n'est plus utilisé par aucun .txt.
+   */
+  async function updateSiblings(song, plan) {
+    const source = plan.sourceName.toLowerCase();
+    const siblings = catalog
+      .getSongs()
+      .filter((other) => other.id !== song.id && other.folder === song.folder);
+    let unused = true;
+    for (const other of siblings) {
+      if (other.files.audio?.toLowerCase() === source) unused = false; // sert de musique
+      if (other.files.video?.toLowerCase() !== source) continue;
+      try {
+        await editor.setVideoFile(other.id, {
+          video: plan.targetName,
+          expectedModifiedAt: other.modifiedAt,
+        });
+        logger.info(`#VIDEO of ${other.folder}/${other.txtFile} → ${plan.targetName}`);
+      } catch (error) {
+        unused = false; // .txt modifié ailleurs : on garde l'original plutôt que le casser
+        logger.warn(`Video kept for ${other.folder}/${other.txtFile}: ${error}`);
+      }
+    }
+    return unused;
+  }
+
+  /**
    * Déroulé de la conversion (tâche de fond : les erreurs sont reportées dans le job).
    * @param {import('./catalogService.js').Song} song
    * @param {ReturnType<typeof planFor>} plan
@@ -230,7 +274,9 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
           await rm(plan.target, { force: true }); // le .txt n'a pas changé : on revient en arrière
           throw error;
         }
-        await unlink(plan.source); // copie dans BACKUP_DIR (étape 3)
+        // L'original n'est supprimé (copie dans BACKUP_DIR, étape 3) que si plus aucun .txt
+        // du dossier ne l'utilise : sinon il deviendrait un « fichier introuvable ».
+        if (await updateSiblings(song, plan)) await unlink(plan.source);
       }
       await catalog.refreshSong(song.id);
       logger.info(
@@ -311,14 +357,97 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
    */
   const copyBatch = (source) => ({
     ...source,
-    items: source.items.map(({ expectedModifiedAt: _ignored, ...item }) => ({ ...item })),
+    items: source.items.map(({ expectedModifiedAt: _date, video: _video, ...item }) => ({
+      ...item,
+    })),
   });
+
+  /**
+   * Vérifie qu'une chanson utilise sa vidéo comme musique et calcule le MP3 à créer.
+   * @param {string} id
+   * @param {number} expectedModifiedAt
+   */
+  async function planExtraction(id, expectedModifiedAt) {
+    const song = catalog.getSong(id);
+    if (!song) throw new SongEditError('SONG_NOT_FOUND', 'Song not found', 404);
+    const folder = catalog.resolveSongFolder(song);
+    const sourceName = song.files.video;
+    const source = folder && sourceName ? resolveInside(folder, sourceName) : null;
+    if (!folder || !sourceName || !source || !videoIsAudio(song)) {
+      throw new SongEditError(
+        'AUDIO_NOT_SHARED',
+        'The audio file is not the video file: nothing to extract',
+        409,
+      );
+    }
+    const targetName = `${path.parse(sourceName).name}.mp3`;
+    const target = path.join(folder, targetName);
+    const reuse = await exists(target);
+    await checkUnchanged(song, expectedModifiedAt);
+    return { song, plan: { from: sourceName, to: targetName, reuse }, folder, source, target };
+  }
+
+  /**
+   * Création du MP3 (l'appelant réserve ffmpeg : `busy`). La vidéo n'est pas modifiée ; elle
+   * pourra ensuite être convertie sans perdre la musique.
+   *
+   * Étapes : ffmpeg écrit un fichier temporaire → contrôle (non vide) → renommage en
+   * `<nom de la vidéo>.mp3` → mise à jour du .txt (sauvegarde datée). En cas d'échec du .txt,
+   * le MP3 créé est retiré.
+   * Si `<nom de la vidéo>.mp3` existe déjà (ex. créé pour la version [DUET] du même dossier),
+   * il est réutilisé : seul le .txt change.
+   *
+   * @param {string} id
+   * @param {number} expectedModifiedAt
+   */
+  async function extract(id, expectedModifiedAt) {
+    const { song, plan, folder, source, target } = await planExtraction(id, expectedModifiedAt);
+    if (plan.reuse) {
+      const result = await editor.setAudioFile(id, { audio: plan.to, expectedModifiedAt });
+      logger.info(`Audio of ${song.folder}/${song.txtFile} → existing ${plan.to}`);
+      return { plan, ...result };
+    }
+    if (!(await ffmpeg.isAvailable())) {
+      throw new SongEditError('FFMPEG_NOT_AVAILABLE', 'ffmpeg is not available', 503);
+    }
+    const temp = path.join(folder, `.${path.parse(plan.to).name}.usm-extracting.mp3`);
+    try {
+      await ffmpeg.extractAudioToMp3({ input: source, output: temp });
+      const { size } = await stat(temp);
+      if (size === 0) {
+        throw new SongEditError('AUDIO_EXTRACTION_FAILED', 'Extracted MP3 is empty', 500);
+      }
+      await renameWithRetry(temp, target);
+      try {
+        const result = await editor.setAudioFile(id, { audio: plan.to, expectedModifiedAt });
+        logger.info(`Audio extracted ${song.folder}/${plan.from} → ${plan.to}`);
+        return { plan, ...result };
+      } catch (error) {
+        await rm(target, { force: true }); // le .txt n'a pas changé : on revient en arrière
+        throw error;
+      }
+    } catch (error) {
+      if (error instanceof FfmpegError) {
+        throw new SongEditError(
+          error.code,
+          error.message,
+          error.code === 'FFMPEG_NOT_AVAILABLE' ? 503 : 500,
+        );
+      }
+      throw error;
+    } finally {
+      await rm(temp, { force: true });
+    }
+  }
 
   /**
    * Traite le lot vidéo après vidéo ; s'arrête proprement si l'arrêt est demandé.
    * @param {InternalBatch} target
    */
   async function runBatch(target) {
+    /** Vidéos déjà converties dans ce lot (« dossier/fichier ») : les autres .txt du dossier
+     * qui les utilisaient ont été mis à jour en même temps. */
+    const converted = new Set();
     for (const item of target.items) {
       if (target.stopRequested) {
         item.status = 'skipped';
@@ -326,22 +455,42 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
       }
       item.status = 'running';
       try {
+        if (target.kind === 'audio') {
+          await extract(item.id, item.expectedModifiedAt);
+          item.status = 'converted';
+          item.progress = 1;
+          continue;
+        }
+        if (item.video && converted.has(item.video)) {
+          // Même vidéo qu'un .txt déjà traité (duo, instrumental…) : déjà convertie
+          item.status = 'converted';
+          item.progress = 1;
+          continue;
+        }
         const { song, plan, summary } = await prepare(item.id, item.expectedModifiedAt);
         const job = newJob(item.id, summary);
         await run(song, plan, job, item.expectedModifiedAt);
+        if (job.state === 'done' && item.video) converted.add(item.video);
         item.status = job.state === 'done' ? 'converted' : 'error';
         item.code = job.code;
         item.progress = job.state === 'done' ? 1 : null;
       } catch (error) {
-        if (!(error instanceof SongEditError)) logger.warn(`Video batch: ${error}`);
+        if (!(error instanceof SongEditError)) logger.warn(`${target.kind} batch: ${error}`);
         item.status = 'error';
-        item.code = error instanceof SongEditError ? error.code : 'VIDEO_CONVERSION_FAILED';
+        item.code =
+          error instanceof SongEditError
+            ? error.code
+            : target.kind === 'audio'
+              ? 'AUDIO_EXTRACTION_FAILED'
+              : 'VIDEO_CONVERSION_FAILED';
       }
     }
     target.state = target.stopRequested ? 'stopped' : 'done';
     target.finishedAt = Date.now();
-    const converted = target.items.filter((i) => i.status === 'converted').length;
-    logger.info(`Video batch ${target.state}: ${converted}/${target.items.length} converted`);
+    const processed = target.items.filter((i) => i.status === 'converted').length;
+    logger.info(
+      `${target.kind} batch ${target.state}: ${processed}/${target.items.length} processed`,
+    );
   }
 
   return {
@@ -389,14 +538,7 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
 
     /**
      * Crée le fichier MP3 d'une chanson dont la vidéo sert aussi de musique (#MP3 = #VIDEO),
-     * puis fait pointer #AUDIO / #MP3 dessus. La vidéo n'est pas modifiée ; elle pourra
-     * ensuite être convertie sans perdre la musique.
-     *
-     * Étapes : ffmpeg écrit un fichier temporaire → contrôle (non vide) → renommage en
-     * `<nom de la vidéo>.mp3` → mise à jour du .txt (sauvegarde datée). En cas d'échec du .txt,
-     * le MP3 créé est retiré.
-     * Si `<nom de la vidéo>.mp3` existe déjà (ex. créé pour la version [DUET] du même dossier),
-     * il est réutilisé : seul le .txt change.
+     * puis fait pointer #AUDIO / #MP3 dessus. Détail des étapes : voir `extract`.
      *
      * @param {string} id
      * @param {{ expectedModifiedAt: number, dryRun?: boolean }} request
@@ -405,61 +547,43 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
      * @throws {SongEditError}
      */
     async extractAudio(id, { expectedModifiedAt, dryRun = false }) {
-      const song = catalog.getSong(id);
-      if (!song) throw new SongEditError('SONG_NOT_FOUND', 'Song not found', 404);
-      const folder = catalog.resolveSongFolder(song);
-      const sourceName = song.files.video;
-      const source = folder && sourceName ? resolveInside(folder, sourceName) : null;
-      if (!folder || !sourceName || !source || !videoIsAudio(song)) {
-        throw new SongEditError(
-          'AUDIO_NOT_SHARED',
-          'The audio file is not the video file: nothing to extract',
-          409,
-        );
-      }
-      const targetName = `${path.parse(sourceName).name}.mp3`;
-      const target = path.join(folder, targetName);
-      const reuse = await exists(target);
-      await checkUnchanged(song, expectedModifiedAt);
-      const plan = { from: sourceName, to: targetName, reuse };
+      const { song, plan } = await planExtraction(id, expectedModifiedAt);
       if (dryRun) return { plan, song, headers: [], backup: null };
-      if (reuse) {
-        const result = await editor.setAudioFile(id, { audio: targetName, expectedModifiedAt });
-        logger.info(`Audio of ${song.folder}/${song.txtFile} → existing ${targetName}`);
-        return { plan, ...result };
-      }
-
+      // MP3 déjà présent : seul le .txt change, ffmpeg n'est pas nécessaire.
+      if (plan.reuse) return extract(id, expectedModifiedAt);
       await ensureCanStart();
       busy = true;
-      const temp = path.join(folder, `.${path.parse(targetName).name}.usm-extracting.mp3`);
       try {
-        await ffmpeg.extractAudioToMp3({ input: source, output: temp });
-        const { size } = await stat(temp);
-        if (size === 0) {
-          throw new SongEditError('AUDIO_EXTRACTION_FAILED', 'Extracted MP3 is empty', 500);
-        }
-        await renameWithRetry(temp, target);
-        try {
-          const result = await editor.setAudioFile(id, { audio: targetName, expectedModifiedAt });
-          logger.info(`Audio extracted ${song.folder}/${sourceName} → ${targetName}`);
-          return { plan, ...result };
-        } catch (error) {
-          await rm(target, { force: true }); // le .txt n'a pas changé : on revient en arrière
-          throw error;
-        }
-      } catch (error) {
-        if (error instanceof FfmpegError) {
-          throw new SongEditError(
-            error.code,
-            error.message,
-            error.code === 'FFMPEG_NOT_AVAILABLE' ? 503 : 500,
-          );
-        }
-        throw error;
+        return await extract(id, expectedModifiedAt);
       } finally {
-        await rm(temp, { force: true });
         busy = false;
       }
+    },
+
+    /**
+     * Chansons dont la vidéo sert aussi de musique (simulation de la création des MP3 en masse).
+     * @returns {Promise<{ available: boolean, items: AudioCandidate[] }>}
+     */
+    async listAudioCandidates() {
+      const songs = catalog.getSongs().filter(videoIsAudio);
+      const items = await Promise.all(
+        songs.map(async (song) => {
+          const video = /** @type {string} */ (song.files.video);
+          const target = `${path.parse(video).name}.mp3`;
+          const folder = catalog.resolveSongFolder(song);
+          const file = folder ? resolveInside(folder, target) : null;
+          return {
+            id: song.id,
+            artist: song.artist,
+            title: song.title,
+            file: `${song.folder}/${video}`,
+            target,
+            reuse: file ? await exists(file) : false,
+            modifiedAt: song.modifiedAt,
+          };
+        }),
+      );
+      return { available: await ffmpeg.isAvailable(), items };
     },
 
     /**
@@ -522,16 +646,20 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
     },
 
     /**
-     * Lance un lot de conversions, traitées l'une après l'autre en tâche de fond.
+     * Lance un lot, traité chanson après chanson en tâche de fond : conversion des vidéos
+     * (`video`) ou création des MP3 des vidéos qui servent de musique (`audio`).
+     * Un seul lot à la fois (ffmpeg occupé).
      *
      * @param {{ id: string, expectedModifiedAt: number }[]} items
+     * @param {'video' | 'audio'} [kind]
      * @returns {Promise<VideoBatch>}
      * @throws {SongEditError} FFMPEG_NOT_AVAILABLE, CONVERSION_BUSY
      */
-    async startBatch(items) {
+    async startBatch(items, kind = 'video') {
       await ensureCanStart();
       /** @type {InternalBatch} */
       const created = {
+        kind,
         state: 'running',
         stopRequested: false,
         startedAt: Date.now(),
@@ -541,6 +669,7 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
           return {
             id,
             expectedModifiedAt,
+            video: song?.files.video ? `${song.folder}/${song.files.video}`.toLowerCase() : null,
             artist: song?.artist ?? null,
             title: song?.title ?? null,
             status: 'pending',
@@ -557,19 +686,26 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
       return copyBatch(created);
     },
 
-    /** @returns {VideoBatch | null} Lot en cours ou dernier lot terminé. */
-    getBatch() {
-      if (batch) syncCurrentProgress(batch);
-      return batch ? copyBatch(batch) : null;
+    /**
+     * Lot en cours ou dernier lot terminé de ce type (null si le dernier lot est d'un autre type).
+     * @param {'video' | 'audio'} [kind]
+     * @returns {VideoBatch | null}
+     */
+    getBatch(kind = 'video') {
+      if (batch?.kind !== kind) return null;
+      syncCurrentProgress(batch);
+      return copyBatch(batch);
     },
 
     /**
-     * Demande l'arrêt du lot après la vidéo en cours (jamais au milieu d'une conversion).
+     * Demande l'arrêt du lot après la chanson en cours (jamais au milieu d'un traitement).
+     * @param {'video' | 'audio'} [kind]
      * @returns {VideoBatch | null}
      */
-    stopBatch() {
-      if (batch?.state === 'running') batch.stopRequested = true;
-      return batch ? copyBatch(batch) : null;
+    stopBatch(kind = 'video') {
+      if (batch?.kind !== kind) return null;
+      if (batch.state === 'running') batch.stopRequested = true;
+      return copyBatch(batch);
     },
   };
 }

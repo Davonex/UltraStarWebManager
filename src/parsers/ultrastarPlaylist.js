@@ -124,3 +124,28 @@ export function removePlaylistEntry(text, entry, same) {
   });
   return { text: kept.join(''), removed };
 }
+
+/**
+ * Remplace dans une playlist les lignes d'une chanson par son nouveau nom (artiste ou titre
+ * modifié). Les autres lignes et les fins de ligne sont conservées.
+ *
+ * @param {string} text  Contenu décodé du .upl.
+ * @param {PlaylistEntry} from  Ancien nom.
+ * @param {PlaylistEntry} to    Nouveau nom.
+ * @param {(a: PlaylistEntry, b: PlaylistEntry) => boolean} same  Comparaison de deux chansons.
+ * @returns {{ text: string, replaced: number }}
+ */
+export function renamePlaylistEntry(text, from, to, same) {
+  const lines = text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+  let replaced = 0;
+  const updated = lines.map((line) => {
+    const current = parseEntry(line.trim());
+    if (current === null || !same(current, from)) return line;
+    const next = formatPlaylistEntry(to);
+    if (line.trim() === next) return line;
+    replaced += 1;
+    const eol = /\r?\n$/.exec(line)?.[0] ?? '';
+    return `${next}${eol}`;
+  });
+  return { text: updated.join(''), replaced };
+}

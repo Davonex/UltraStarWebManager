@@ -213,6 +213,42 @@ export function createSongsController(catalog, editor, videos) {
     },
 
     /**
+     * POST /api/songs/:id/repair-text — répare les caractères mal encodés (« Ã© » → « é »).
+     * Corps : `{ expectedModifiedAt: number, dryRun?: boolean }`.
+     * Réponse : `{ data: { changes: [{ line, before, after }], song, backup } }`.
+     *
+     * @param {import('express').Request<{ id: string }>} req
+     * @param {import('express').Response} res
+     */
+    async repairText(req, res) {
+      if (!ensureReady(res)) return;
+      const { expectedModifiedAt, dryRun } = req.body ?? {};
+      if (
+        typeof expectedModifiedAt !== 'number' ||
+        (dryRun !== undefined && typeof dryRun !== 'boolean')
+      ) {
+        res
+          .status(400)
+          .json({ error: { code: 'INVALID_REQUEST', message: 'Invalid request body' } });
+        return;
+      }
+      try {
+        res.json({
+          data: await editor.repairText(req.params.id, { expectedModifiedAt, dryRun }),
+        });
+      } catch (error) {
+        if (!(error instanceof SongEditError)) throw error;
+        res.status(error.status).json({
+          error: {
+            code: error.code,
+            message: error.message,
+            ...(error.params ? { params: error.params } : {}),
+          },
+        });
+      }
+    },
+
+    /**
      * POST /api/catalog/rescan — relit tous les fichiers .txt de SONG_DIR.
      * Réponse : `{ data: { count, scannedAt, durationMs, skipped, errors } }`.
      *

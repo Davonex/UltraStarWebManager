@@ -5,10 +5,12 @@
  * n'empile pas les fenêtres), qui se rouvre à la fermeture.
  *
  * 1. Recherche par artiste et titre dès l'ouverture → liste des enregistrements trouvés ;
- * 2. l'utilisateur choisit le bon → année, langues et genres proposés, à côté des valeurs
- *    actuelles ;
- * 3. il coche ce qui lui convient → seules ces valeurs remplacent #YEAR, #LANGUAGE, #GENRE
- *    (PATCH /headers : sauvegarde datée, encodage conservé).
+ * 2. l'utilisateur choisit le bon → artiste et titre (écriture exacte de MusicBrainz), année,
+ *    langues et genres proposés, à côté des valeurs actuelles ;
+ * 3. il coche ce qui lui convient → seules ces valeurs remplacent #ARTIST, #TITLE, #YEAR,
+ *    #LANGUAGE, #GENRE (PATCH /headers : sauvegarde datée, encodage conservé ; artiste et
+ *    titre suivis par les autres .txt du dossier et les playlists). Artiste et titre ne sont
+ *    jamais cochés d'office.
  *
  * @module musicBrainzPanel
  */
@@ -71,9 +73,15 @@ function errorText(error) {
 /**
  * @param {object} options
  * @param {HTMLElement} options.modal  Fenêtre #musicbrainz-modal (.modal Bootstrap).
- * @param {(song: Song, applied: { backup: string | null } | null) => void} options.onClosed
+ * @param {(song: Song, applied: Applied | null) => void} options.onClosed
  *   À la fermeture : la chanson (à jour si des valeurs ont été appliquées) et le résultat.
  */
+/**
+ * @typedef {{ backup: string | null,
+ *   related?: { updated: { txtFile: string }[], failed: { txtFile: string }[] },
+ *   playlists?: { updated: { file: string }[], failed: { file: string }[] } }} Applied
+ */
+
 export function createMusicBrainzDialog({ modal, onClosed }) {
   const body = /** @type {HTMLElement} */ (modal.querySelector('.modal-body'));
   const subtitle = /** @type {HTMLElement} */ (modal.querySelector('.mb-subtitle'));
@@ -86,9 +94,9 @@ export function createMusicBrainzDialog({ modal, onClosed }) {
    *   candidates: MbCandidate[],
    *   chosen: MbCandidate | null,
    *   suggestion: MbSuggestion | null,
-   *   pick: { year: boolean, languages: Set<string>, genres: Set<string> },
+   *   pick: { artist: boolean, title: boolean, year: boolean, languages: Set<string>, genres: Set<string> },
    *   error: string | null,
-   *   applied: { backup: string | null } | null,
+   *   applied: Applied | null,
    * }}
    */
   const state = {
@@ -97,7 +105,7 @@ export function createMusicBrainzDialog({ modal, onClosed }) {
     candidates: [],
     chosen: null,
     suggestion: null,
-    pick: { year: false, languages: new Set(), genres: new Set() },
+    pick: { artist: false, title: false, year: false, languages: new Set(), genres: new Set() },
     error: null,
     applied: null,
   };
@@ -137,6 +145,8 @@ export function createMusicBrainzDialog({ modal, onClosed }) {
       const firstLanguage = suggestion.languages[0]?.name;
       const firstGenre = suggestion.genres[0];
       state.pick = {
+        artist: false, // jamais coché d'office : renomme aussi dans les playlists
+        title: false,
         year: song.year === null && suggestion.year !== null,
         languages: new Set(song.languages.length === 0 && firstLanguage ? [firstLanguage] : []),
         genres: new Set(song.genres.length === 0 && firstGenre ? [firstGenre] : []),
@@ -154,6 +164,13 @@ export function createMusicBrainzDialog({ modal, onClosed }) {
     /** @type {Record<string, string>} */
     const values = {};
     if (!suggestion) return values;
+    const song = state.song;
+    if (pick.artist && suggestion.artist && suggestion.artist !== song?.artist) {
+      values.ARTIST = suggestion.artist;
+    }
+    if (pick.title && suggestion.title && suggestion.title !== song?.title) {
+      values.TITLE = suggestion.title;
+    }
     if (pick.year && suggestion.year !== null) values.YEAR = String(suggestion.year);
     const languages = suggestion.languages.map((l) => l.name).filter((n) => pick.languages.has(n));
     if (languages.length > 0) values.LANGUAGE = languages.join(', ');
@@ -174,7 +191,7 @@ export function createMusicBrainzDialog({ modal, onClosed }) {
         expectedModifiedAt: song.modifiedAt,
       });
       state.song = data.song;
-      state.applied = { backup: data.backup };
+      state.applied = { backup: data.backup, related: data.related, playlists: data.playlists };
       close(); // la fenêtre info se rouvre avec le message de réussite
     } catch (error) {
       Object.assign(state, { phase: 'suggestion', error: errorText(error) });
@@ -247,7 +264,33 @@ export function createMusicBrainzDialog({ modal, onClosed }) {
     }
     head.append(headRow);
     const rows = el('tbody');
+    /**
+     * Artiste ou titre : case à cocher seulement si l'écriture diffère.
+     * @param {string | null} proposed
+     * @param {string | null} currentValue
+     * @param {'artist' | 'title'} key
+     */
+    const identity = (proposed, currentValue, key) => {
+      if (!proposed) return [];
+      if (proposed === currentValue)
+        return [el('span', 'text-body-secondary', t('musicbrainz.same'))];
+      return [
+        checkbox(proposed, pick[key], (on) => {
+          pick[key] = on;
+        }),
+      ];
+    };
     rows.append(
+      row(
+        t('details.artist'),
+        song.artist ?? '',
+        identity(suggestion.artist, song.artist, 'artist'),
+      ),
+      row(
+        t('details.songTitle'),
+        song.title ?? '',
+        identity(suggestion.title, song.title, 'title'),
+      ),
       row(
         t('details.year'),
         song.year ? String(song.year) : '',
@@ -294,12 +337,11 @@ export function createMusicBrainzDialog({ modal, onClosed }) {
       }),
       button(t('musicbrainz.cancel'), 'btn-outline-secondary', close),
     );
-    return [
-      source,
-      table,
-      el('p', 'small text-body-secondary mb-2', t('musicbrainz.hint')),
-      actions,
-    ];
+    const notes = [el('p', 'small text-body-secondary mb-2', t('musicbrainz.hint'))];
+    if (pick.artist || pick.title) {
+      notes.push(el('p', 'small text-body-secondary mb-2', t('edit.identityHint')));
+    }
+    return [source, table, ...notes, actions];
   }
 
   /** @returns {Node[]} */

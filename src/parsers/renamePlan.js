@@ -12,12 +12,19 @@
  * - les fichiers non cités par un .txt (sauvegardes, paroles…) : aucun nom proposé, mais ils
  *   peuvent être renommés à la main (aucun .txt à corriger) ;
  * - pour chaque .txt, les en-têtes modifiés (#MP3, #VIDEO, #COVER…) et son nouveau nom ;
+ *   #BACKGROUND est retiré quand il désigne la pochette et qu'il n'y a pas d'autre image ;
  * - les conflits (nom invalide, doublon, extension changée) qui bloquent l'application.
  *
  * @module parsers/renamePlan
  */
 import { fileNameKey } from '../utils/text.js';
-import { DEFAULT_NAMING, expectedName, matchesPattern, titleWithoutDuetMark } from './naming.js';
+import {
+  DEFAULT_NAMING,
+  expectedName,
+  isRedundantBackground,
+  matchesPattern,
+  titleWithoutDuetMark,
+} from './naming.js';
 import { updateHeaders } from './ultrastarEdit.js';
 
 /** En-têtes qui citent un fichier, avec le modèle de nommage à appliquer. */
@@ -85,6 +92,7 @@ const MAX_NAME_LENGTH = 200;
  * @property {RenameEntry[]} files
  * @property {RenameTxtResult[]} txts
  * @property {number} renameCount   Dossier et fichiers renommés.
+ * @property {number} txtChangeCount  .txt dont le contenu change (en-têtes).
  * @property {number} errorCount
  */
 
@@ -264,14 +272,29 @@ export function buildRenamePlan({
   const renamed = new Map(
     files.filter((e) => e.action === 'rename').map((e) => [fileNameKey(e.from), e.to]),
   );
+  /** @param {Record<string, string>} headers @param {string} header */
+  const actualFile = (headers, header) => {
+    const reference = headers[header];
+    return reference ? filesByKey.get(fileNameKey(reference.trim())) : undefined;
+  };
   const txtResults = txts.map((txt) => {
-    /** @type {Record<string, string>} */
+    /** @type {Record<string, string | null>} */
     const values = {};
     for (const header of Object.keys(FILE_HEADERS)) {
-      const reference = txt.headers[header];
-      const actual = reference ? filesByKey.get(fileNameKey(reference.trim())) : undefined;
+      const actual = actualFile(txt.headers, header);
       const target = actual ? renamed.get(fileNameKey(actual)) : undefined;
       if (target) values[header] = target;
+    }
+    // Fond = pochette, sans autre image : l'entrée #BACKGROUND est retirée (pochette prioritaire).
+    if (
+      rules.background?.enabled &&
+      isRedundantBackground(
+        actualFile(txt.headers, 'COVER'),
+        actualFile(txt.headers, 'BACKGROUND'),
+        visible,
+      )
+    ) {
+      values.BACKGROUND = null;
     }
     const { text, changes } = updateHeaders(txt.text, values);
     return {
@@ -294,6 +317,7 @@ export function buildRenamePlan({
     files,
     txts: txtResults,
     renameCount: all.filter((e) => e.action === 'rename').length,
+    txtChangeCount: txtResults.filter((t) => t.changes.length > 0).length,
     errorCount: all.filter((e) => e.error !== null).length,
   };
 }

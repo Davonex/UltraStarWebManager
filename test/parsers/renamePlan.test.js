@@ -181,6 +181,52 @@ describe('buildRenamePlan', () => {
 });
 
 describe('nameError', () => {
+  it('fond = pochette, seule image : #BACKGROUND retiré, pochette renommée en [CO]', () => {
+    const text = [
+      '#TITLE:Easy',
+      '#ARTIST:Phil',
+      '#MP3:Phil - Easy.mp3',
+      '#COVER:img.jpg',
+      '#BACKGROUND:img.jpg',
+      '#BPM:300',
+      ': 0 4 0 la',
+      'E',
+      '',
+    ].join('\n');
+    const plan = buildRenamePlan({
+      folderName: 'Phil - Easy',
+      fileNames: ['Phil - Easy.txt', 'Phil - Easy.mp3', 'img.jpg'],
+      txts: [txt('Phil - Easy.txt', text)],
+    });
+    const image = plan.files.find((f) => f.from === 'img.jpg');
+    assert.equal(image?.kind, 'cover');
+    assert.equal(image?.to, 'Phil - Easy [CO].jpg');
+    assert.deepEqual(plan.txts[0].changes, [
+      { header: 'COVER', before: 'img.jpg', after: 'Phil - Easy [CO].jpg' },
+      { header: 'BACKGROUND', before: 'img.jpg', after: null },
+    ]);
+    assert.doesNotMatch(plan.txts[0].text, /#BACKGROUND/);
+    assert.equal(plan.txtChangeCount, 1);
+
+    // Déjà bien nommée : aucun renommage, seul le .txt change
+    const named = buildRenamePlan({
+      folderName: 'Phil - Easy',
+      fileNames: ['Phil - Easy.txt', 'Phil - Easy.mp3', 'Phil - Easy [CO].jpg'],
+      txts: [txt('Phil - Easy.txt', text.replaceAll('img.jpg', 'Phil - Easy [CO].jpg'))],
+    });
+    assert.equal(named.renameCount, 0);
+    assert.equal(named.txtChangeCount, 1);
+    assert.equal(named.txts[0].changes[0].header, 'BACKGROUND');
+
+    // Autre image dans le dossier : #BACKGROUND gardé
+    const other = buildRenamePlan({
+      folderName: 'Phil - Easy',
+      fileNames: ['Phil - Easy.txt', 'Phil - Easy.mp3', 'img.jpg', 'fond.png'],
+      txts: [txt('Phil - Easy.txt', text)],
+    });
+    assert.match(other.txts[0].text, /#BACKGROUND:Phil - Easy \[CO\]\.jpg/);
+  });
+
   it('refuse les noms invalides sous Windows', () => {
     assert.equal(nameError('Queen - Bohemian Rhapsody.mp3'), null);
     assert.equal(nameError(''), 'EMPTY');

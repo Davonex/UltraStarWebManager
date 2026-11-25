@@ -48,7 +48,19 @@ const bootstrapDir = path.join(
  */
 export function createApp(config, deps) {
   const auth = createAuth({ accessKeys: config.accessKeys, sessionDays: config.sessionDays });
-  const editor = createSongEditor({ catalog: deps.catalog, backupDir: config.backupDir });
+  const playlists =
+    deps.playlists ??
+    createPlaylists({
+      playlistDir: config.playlistDir,
+      catalog: deps.catalog,
+      backupDir: config.backupDir,
+    });
+  // Artiste ou titre modifié : les playlists qui citent la chanson sont mises à jour.
+  const editor = createSongEditor({
+    catalog: deps.catalog,
+    backupDir: config.backupDir,
+    playlists,
+  });
   const ffmpeg = deps.ffmpeg ?? createFfmpeg({ ffmpegPath: config.ffmpegPath });
   const videos = createVideoConverter({
     catalog: deps.catalog,
@@ -86,13 +98,7 @@ export function createApp(config, deps) {
     apiGuard,
     createApiRouter({
       ...deps,
-      playlists:
-        deps.playlists ??
-        createPlaylists({
-          playlistDir: config.playlistDir,
-          catalog: deps.catalog,
-          backupDir: config.backupDir,
-        }),
+      playlists,
       musicBrainz: deps.musicBrainz ?? createMusicBrainz(),
       auth,
       editor,

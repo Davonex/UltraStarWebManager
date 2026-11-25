@@ -82,6 +82,7 @@ export function createApiRouter({
   router.post('/catalog/rescan', write, songs.rescan);
   router.patch('/songs/:id/headers', write, songs.editHeaders);
   router.post('/songs/:id/convert-utf8', write, songs.convertToUtf8);
+  router.post('/songs/:id/repair-text', write, songs.repairText);
   router.post('/songs/:id/convert-video', write, video.convert);
   // Playlists : ajout / retrait d'une chanson (sauvegarde datée, écriture atomique)
   router.post('/playlists/:file/songs', write, playlistsCtl.addSong);
@@ -100,6 +101,9 @@ export function createApiRouter({
   router.post('/bulk/convert-video', write, bulk.convertVideos);
   router.get('/bulk/convert-video', write, bulk.getVideoBatch);
   router.post('/bulk/convert-video/stop', write, bulk.stopVideoBatch);
+  router.post('/bulk/extract-audio', write, bulk.extractAudio);
+  router.get('/bulk/extract-audio', write, bulk.getAudioBatch);
+  router.post('/bulk/extract-audio/stop', write, bulk.stopAudioBatch);
 
   // Administration : préférences communes à tous (modèles de nommage…)
   router.put('/settings', requireRole('admin'), preferences.update);

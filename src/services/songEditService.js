@@ -1,8 +1,14 @@
 // @ts-check
 /**
- * Modification des en-têtes d'une chanson (EDITION, TAGS, CREATOR, YEAR, GENRE, LANGUAGE).
+ * Modification des en-têtes d'une chanson (ARTIST, TITLE, EDITION, TAGS, CREATOR, YEAR, GENRE,
+ * LANGUAGE, P1, P2).
  *
- * Contient aussi la conversion d'encodage en UTF-8 sans BOM (format 1.1.0).
+ * Artiste et titre : la modification s'applique aussi aux autres .txt du dossier qui
+ * désignent la même chanson (solo, duo… ; la marque de duo du titre est gardée) et aux
+ * playlists qui la citent (« Artiste : Titre »).
+ *
+ * Contient aussi la conversion d'encodage en UTF-8 sans BOM (format 1.1.0) et la réparation
+ * des caractères mal encodés (« Ã© » au lieu de « é »).
  *
  * Étapes : vérifie que le fichier n'a pas changé depuis son affichage → calcule les
  * changements → (simulation : s'arrête là) → ré-encode dans l'encodage d'origine →
@@ -11,13 +17,18 @@
  * @module services/songEditService
  */
 import { readFile, stat } from 'node:fs/promises';
+import { planMojibakeRepair } from '../parsers/mojibake.js';
+import { duetMarkOf, titleWithoutDuetMark } from '../parsers/naming.js';
 import { encodeSongText, updateHeaders } from '../parsers/ultrastarEdit.js';
 import { decodeSongBuffer } from '../parsers/ultrastarTxt.js';
+import { looseKey } from '../utils/text.js';
 import { UnencodableCharacterError } from '../utils/windows1252.js';
 import { backupFile, writeFileAtomic } from './fileWriter.js';
 
 /** En-têtes modifiables depuis l'interface (fenêtre info, MusicBrainz). */
 export const EDITABLE_HEADERS = Object.freeze([
+  'ARTIST',
+  'TITLE',
   'EDITION',
   'TAGS',
   'CREATOR',
@@ -28,7 +39,9 @@ export const EDITABLE_HEADERS = Object.freeze([
   'P2',
 ]);
 /** En-têtes à une seule valeur (pas de liste séparée par des virgules). */
-const SINGLE_VALUE_HEADERS = new Set(['P1', 'P2']);
+const SINGLE_VALUE_HEADERS = new Set(['ARTIST', 'TITLE', 'P1', 'P2']);
+/** En-têtes obligatoires : jamais supprimés. */
+const REQUIRED_HEADERS = new Set(['ARTIST', 'TITLE']);
 /** Ancien nom des chanteurs d'un duo (avant le format 1.0.0), mis à jour s'il est utilisé. */
 const LEGACY_SINGER_HEADERS = Object.freeze({ P1: 'DUETSINGERP1', P2: 'DUETSINGERP2' });
 /** Longueur maximale d'une valeur d'en-tête. */
@@ -66,6 +79,12 @@ export class SongEditError extends Error {
  * @throws {SongEditError}
  */
 export function normalizeHeaderValue(header, value) {
+  if (
+    (value === null || (typeof value === 'string' && !value.trim())) &&
+    REQUIRED_HEADERS.has(header)
+  ) {
+    throw new SongEditError('VALUE_REQUIRED', `${header} cannot be empty`, 400, { header });
+  }
   if (value === null) return null;
   if (typeof value !== 'string') {
     throw new SongEditError('INVALID_VALUE', `${header} must be a string`, 400, { header });
@@ -104,9 +123,11 @@ export function normalizeHeaderValue(header, value) {
  * @param {object} options
  * @param {import('./catalogService.js').Catalog} options.catalog
  * @param {string} options.backupDir
- * @param {Pick<Console, 'info'>} [options.logger]
+ * @param {Pick<import('./playlistService.js').Playlists, 'renameSongEntries'> | null} [options.playlists]
+ *   Playlists à mettre à jour quand l'artiste ou le titre change (null : aucune).
+ * @param {Pick<Console, 'info' | 'warn'>} [options.logger]
  */
-export function createSongEditor({ catalog, backupDir, logger = console }) {
+export function createSongEditor({ catalog, backupDir, playlists = null, logger = console }) {
   /**
    * Chanson, fichier et contenu actuels, après vérification de la date de modification.
    * @param {string} id
@@ -143,6 +164,91 @@ export function createSongEditor({ catalog, backupDir, logger = console }) {
     return { song: refreshed, backup };
   }
 
+  /**
+   * Écrit des valeurs d'en-têtes dans un .txt (encodage d'origine conservé).
+   * @param {import('./catalogService.js').Song} song
+   * @param {string} file
+   * @param {Buffer} buffer
+   * @param {Record<string, string | null>} values
+   */
+  async function writeHeaders(song, file, buffer, values) {
+    const { text, encoding } = decodeSongBuffer(buffer);
+    const { text: updated, changes } = updateHeaders(text, values);
+    if (changes.length === 0) return { changes, song, backup: null };
+    let data;
+    try {
+      data = encodeSongText(updated, encoding);
+    } catch (error) {
+      if (!(error instanceof UnencodableCharacterError)) throw error;
+      throw new SongEditError(
+        'UNENCODABLE_CHARACTER',
+        `"${error.character}" cannot be saved in this ${encoding} file`,
+        422,
+        { character: error.character, encoding },
+      );
+    }
+    const result = await commit(song, file, data, changes.map((c) => c.header).join(', '));
+    return { changes, ...result };
+  }
+
+  /**
+   * Après un changement d'artiste ou de titre : mêmes valeurs dans les autres .txt du dossier
+   * qui désignent la même chanson (le titre garde leur marque de duo), puis dans les playlists.
+   *
+   * @param {import('./catalogService.js').Song} before  Chanson avant modification.
+   * @param {import('./catalogService.js').Song} after   Chanson modifiée.
+   */
+  async function propagateIdentity(before, after) {
+    const oldArtist = before.artist ?? '';
+    const oldTitle = before.title ?? '';
+    const newArtist = after.artist ?? '';
+    const newTitle = after.title ?? '';
+    const baseKey = (/** @type {string | null} */ title) =>
+      looseKey(titleWithoutDuetMark(title ?? ''));
+    const siblings = catalog
+      .getSongs()
+      .filter(
+        (other) =>
+          other.id !== before.id &&
+          other.folder === before.folder &&
+          looseKey(other.artist ?? '') === looseKey(oldArtist) &&
+          baseKey(other.title) === baseKey(oldTitle),
+      );
+    const renames = [
+      { from: { artist: oldArtist, title: oldTitle }, to: { artist: newArtist, title: newTitle } },
+    ];
+    /** @type {{ txtFile: string, backup: string | null }[]} */
+    const updated = [];
+    /** @type {{ txtFile: string, code: string }[]} */
+    const failed = [];
+    for (const other of siblings) {
+      /** @type {Record<string, string>} */
+      const values = {};
+      if (newArtist !== oldArtist) values.ARTIST = newArtist;
+      if (newTitle !== oldTitle) {
+        values.TITLE = `${titleWithoutDuetMark(newTitle)}${duetMarkOf(other.title ?? '')}`;
+      }
+      try {
+        const { file, buffer } = await loadForWrite(other.id, other.modifiedAt);
+        const result = await writeHeaders(other, file, buffer, values);
+        if (result.changes.length > 0)
+          updated.push({ txtFile: other.txtFile, backup: result.backup });
+        renames.push({
+          from: { artist: other.artist ?? '', title: other.title ?? '' },
+          to: { artist: result.song.artist ?? '', title: result.song.title ?? '' },
+        });
+      } catch (error) {
+        if (!(error instanceof SongEditError)) throw error;
+        logger.warn(`Not updated: ${other.folder}/${other.txtFile} (${error.code})`);
+        failed.push({ txtFile: other.txtFile, code: error.code });
+      }
+    }
+    const playlistResult = playlists
+      ? await playlists.renameSongEntries(renames)
+      : { updated: [], failed: [] };
+    return { related: { updated, failed }, playlists: playlistResult };
+  }
+
   return {
     /**
      * Convertit le fichier d'une chanson en UTF-8 sans BOM (encodage exigé par le format 1.1.0).
@@ -172,6 +278,39 @@ export function createSongEditor({ catalog, backupDir, logger = console }) {
       }
       const result = await commit(song, file, data, `encoding ${encoding} → utf-8`);
       return { changed: true, from: encoding, ...result };
+    },
+
+    /**
+     * Répare les caractères mal encodés (texte UTF-8 relu en Windows-1252 puis réenregistré :
+     * « Ã© » au lieu de « é »). L'encodage du fichier et les fins de ligne sont conservés.
+     * En simulation, renvoie seulement la liste des lignes modifiées.
+     *
+     * @param {string} id
+     * @param {{ expectedModifiedAt: number, dryRun?: boolean }} request
+     * @returns {Promise<{ changes: import('../parsers/mojibake.js').MojibakeLineChange[],
+     *   song: import('./catalogService.js').Song, backup: string | null }>}
+     * @throws {SongEditError}
+     */
+    async repairText(id, { expectedModifiedAt, dryRun = false }) {
+      const { song, file, buffer } = await loadForWrite(id, expectedModifiedAt);
+      const { text, encoding } = decodeSongBuffer(buffer);
+      const { text: repaired, changes } = planMojibakeRepair(text);
+      if (dryRun || changes.length === 0) return { changes, song, backup: null };
+
+      let data;
+      try {
+        data = encodeSongText(repaired, encoding);
+      } catch (error) {
+        if (!(error instanceof UnencodableCharacterError)) throw error;
+        throw new SongEditError(
+          'UNENCODABLE_CHARACTER',
+          `"${error.character}" cannot be saved in this ${encoding} file`,
+          422,
+          { character: error.character, encoding },
+        );
+      }
+      const result = await commit(song, file, data, `${changes.length} garbled line(s) repaired`);
+      return { changes, ...result };
     },
 
     /**
@@ -232,7 +371,10 @@ export function createSongEditor({ catalog, backupDir, logger = console }) {
      * @param {number} request.expectedModifiedAt  Date de modification vue par l'utilisateur.
      * @param {boolean} [request.dryRun]  Simulation : calcule les changements sans écrire.
      * @returns {Promise<{ changes: import('../parsers/ultrastarEdit.js').HeaderChange[],
-     *   song: import('./catalogService.js').Song, backup: string | null }>}
+     *   song: import('./catalogService.js').Song, backup: string | null,
+     *   related?: { updated: { txtFile: string, backup: string | null }[], failed: { txtFile: string, code: string }[] },
+     *   playlists?: { updated: { file: string, backup: string }[], failed: { file: string, code: string }[] } }>}
+     *   `related` et `playlists` : seulement si l'artiste ou le titre a changé.
      * @throws {SongEditError}
      */
     async editHeaders(id, { values, expectedModifiedAt, dryRun = false }) {
@@ -248,7 +390,7 @@ export function createSongEditor({ catalog, backupDir, logger = console }) {
       }
 
       const { song, file, buffer } = await loadForWrite(id, expectedModifiedAt);
-      const { text, encoding } = decodeSongBuffer(buffer);
+      const { text } = decodeSongBuffer(buffer);
       // Duo à l'ancien format : #DUETSINGERP1 est mis à jour plutôt que d'ajouter un #P1.
       for (const [header, legacy] of Object.entries(LEGACY_SINGER_HEADERS)) {
         if (!(header in clean)) continue;
@@ -258,24 +400,14 @@ export function createSongEditor({ catalog, backupDir, logger = console }) {
           delete clean[header];
         }
       }
-      const { text: updated, changes } = updateHeaders(text, clean);
-      if (dryRun || changes.length === 0) return { changes, song, backup: null };
+      if (dryRun) return { changes: updateHeaders(text, clean).changes, song, backup: null };
 
-      let data;
-      try {
-        data = encodeSongText(updated, encoding);
-      } catch (error) {
-        if (!(error instanceof UnencodableCharacterError)) throw error;
-        throw new SongEditError(
-          'UNENCODABLE_CHARACTER',
-          `"${error.character}" cannot be saved in this ${encoding} file`,
-          422,
-          { character: error.character, encoding },
-        );
-      }
-
-      const result = await commit(song, file, data, changes.map((c) => c.header).join(', '));
-      return { changes, ...result };
+      const result = await writeHeaders(song, file, buffer, clean);
+      const identityChanged = result.changes.some(
+        (c) => c.header === 'ARTIST' || c.header === 'TITLE',
+      );
+      if (!identityChanged) return result;
+      return { ...result, ...(await propagateIdentity(song, result.song)) };
     },
   };
 }

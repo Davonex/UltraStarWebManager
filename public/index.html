@@ -192,6 +192,12 @@
                   </button>
                 </li>
                 <li>
+                  <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-sort="added">
+                    <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#plus-circle" /></svg>
+                    <span data-i18n="filters.sortAdded">Recently added</span>
+                  </button>
+                </li>
+                <li>
                   <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-sort="recent">
                     <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#clock-history" /></svg>
                     <span data-i18n="filters.sortRecent">Recently modified</span>
@@ -382,6 +388,19 @@
                 <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#film" /></svg>
                 <span data-i18n="bulk.video.tab">MP4 H.264 videos</span>
               </button>
+              <button
+                id="bulk-tab-audio"
+                class="nav-link"
+                type="button"
+                role="tab"
+                data-bs-toggle="tab"
+                data-bs-target="#bulk-pane-audio"
+                aria-controls="bulk-pane-audio"
+                aria-selected="false"
+              >
+                <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#link-45deg" /></svg>
+                <span data-i18n="bulk.audio.tab">Music in the video</span>
+              </button>
             </div>
             <div class="tab-content">
               <div id="bulk-pane-utf8" class="tab-pane fade show active" role="tabpanel" aria-labelledby="bulk-tab-utf8">
@@ -479,6 +498,56 @@
                             <th scope="col" data-i18n="details.videoFormat">Video format</th>
                             <th scope="col" data-i18n="details.resolution">Resolution</th>
                             <th scope="col" class="text-end" data-i18n="bulk.size">Size</th>
+                          </tr>
+                        </thead>
+                        <tbody data-part="rows"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </section>
+              </div>
+              <div id="bulk-pane-audio" class="tab-pane fade" role="tabpanel" aria-labelledby="bulk-tab-audio">
+                <section class="bulk-tool" data-bulk-tool="audio" aria-labelledby="bulk-audio-title">
+                  <h3 id="bulk-audio-title" class="h6" data-i18n="bulk.audio.title">Create the MP3 of videos used as music</h3>
+                  <p class="small text-body-secondary" data-i18n="bulk.audio.hint">
+                    Songs whose #MP3 is the video file. The music is extracted to an MP3 next to the
+                    video, then #MP3 points to it; the video is not changed.
+                  </p>
+                  <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-part="simulate">
+                      <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#arrow-repeat" /></svg>
+                      <span data-i18n="bulk.simulate">Simulate</span>
+                    </button>
+                    <p class="small mb-0" data-part="status" aria-live="polite"></p>
+                  </div>
+                  <div class="bulk-running mb-2" data-part="running" hidden>
+                    <progress class="bulk-progress w-100 mb-1" data-part="progress"></progress>
+                    <p class="small mb-1" data-part="current" aria-live="polite"></p>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-part="stop">
+                      <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#x-lg" /></svg>
+                      <span data-i18n="bulk.audio.stop">Stop after the current song</span>
+                    </button>
+                  </div>
+                  <p class="small mb-2" data-part="summary" role="status" hidden></p>
+                  <ul class="small text-danger mb-2" data-part="errors" hidden></ul>
+                  <div data-part="list" hidden>
+                    <button type="button" class="btn btn-sm btn-primary mb-2" data-part="apply">Create</button>
+                    <div class="table-responsive bulk-table">
+                      <table class="table table-sm align-middle mb-2">
+                        <thead>
+                          <tr>
+                            <th scope="col">
+                              <input
+                                type="checkbox"
+                                class="form-check-input"
+                                data-part="select-all"
+                                aria-label="Select all"
+                                data-i18n-aria-label="bulk.selectAll"
+                              />
+                            </th>
+                            <th scope="col" data-i18n="bulk.song">Song</th>
+                            <th scope="col" data-i18n="details.video">Video</th>
+                            <th scope="col" data-i18n="bulk.audio.target">MP3 created</th>
                           </tr>
                         </thead>
                         <tbody data-part="rows"></tbody>

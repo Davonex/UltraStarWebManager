@@ -6,6 +6,7 @@ import {
   formatPlaylistEntry,
   parseUltrastarPlaylist,
   removePlaylistEntry,
+  renamePlaylistEntry,
 } from '../../src/parsers/ultrastarPlaylist.js';
 
 const SAMPLE = [
@@ -62,6 +63,27 @@ describe('ajout / retrait d’une chanson', () => {
     a.artist.toLowerCase() === b.artist.toLowerCase() &&
     a.title.toLowerCase() === b.title.toLowerCase();
   const UPL = '#Name: Top\r\n#Songs:\r\nZazie : Zen\r\nDesireless : Voyage Voyage\r\n';
+
+  it('renomme les lignes d’une chanson, fins de ligne et autres lignes conservées', () => {
+    const text = `${UPL}ZAZIE : zen`;
+    assert.deepEqual(
+      renamePlaylistEntry(
+        text,
+        { artist: 'Zazie', title: 'Zen' },
+        { artist: 'Zazie', title: 'Zen (Live)' },
+        same,
+      ),
+      {
+        text: '#Name: Top\r\n#Songs:\r\nZazie : Zen (Live)\r\nDesireless : Voyage Voyage\r\nZazie : Zen (Live)',
+        replaced: 2,
+      },
+    );
+    assert.equal(
+      renamePlaylistEntry(UPL, { artist: 'X', title: 'Y' }, { artist: 'A', title: 'B' }, same)
+        .replaced,
+      0,
+    );
+  });
 
   it('ajoute à la fin en gardant les fins de ligne', () => {
     assert.deepEqual(addPlaylistEntry(UPL, { artist: 'Amir', title: 'Rétine' }, same), {

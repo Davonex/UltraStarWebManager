@@ -22,6 +22,7 @@
     "sortTitle": "Title",
     "sortYearDesc": "Newest year",
     "sortYearAsc": "Oldest year",
+    "sortAdded": "Recently added",
     "sortRecent": "Recently modified",
     "duetOnly": "Duets",
     "reset": "Reset",
@@ -78,7 +79,7 @@
     "INVALID_VALUE": "Invalid value.",
     "CONVERSION_FAILED": "Conversion check failed: the file was not changed.",
     "FFMPEG_NOT_AVAILABLE": "ffmpeg not found: set FFMPEG_PATH in .env.",
-    "CONVERSION_BUSY": "Another video is being converted: wait for it to finish.",
+    "CONVERSION_BUSY": "Another ffmpeg task (video conversion or MP3 creation) is running: wait for it to finish.",
     "VIDEO_TARGET_EXISTS": "{file} already exists in the song folder: nothing was changed.",
     "VIDEO_ALREADY_H264": "This video is already MP4 H.264, at most 1080p.",
     "VIDEO_CONVERSION_FAILED": "Video conversion failed: nothing was changed.",
@@ -101,7 +102,9 @@
     "RENAME_CONFLICT": "Some names are invalid.",
     "RENAME_TARGET_EXISTS": "\"{file}\" already exists: nothing was changed.",
     "RENAME_NOT_FOUND": "Rename not found.",
-    "RENAME_ALREADY_UNDONE": "This rename was already undone."
+    "RENAME_ALREADY_UNDONE": "This rename was already undone.",
+    "VALUE_REQUIRED": "This field cannot be empty.",
+    "PLAYLIST_WRITE_FAILED": "The playlist could not be updated."
   },
   "warnings": {
     "MISSING_HEADER": "Missing or invalid #{header} header",
@@ -113,6 +116,7 @@
     "MISSING_FILE": "File not found ({kind}): {file}",
     "ENCODING_NOT_UTF8": "Encoding {encoding}: UTF-8 without BOM expected",
     "ENCODING_UTF8_BOM": "UTF-8 with BOM: UTF-8 without BOM expected",
+    "ENCODING_MOJIBAKE": "Garbled characters (e.g. “Ã©” instead of “é”)",
     "VIDEO_NOT_H264": "Video {format}: MP4 H.264 recommended",
     "VIDEO_IS_AUDIO": "Same file for the music and the video: {file}",
     "VIDEO_TOO_LARGE": "Video {width}×{height}: larger than 1080p, heavy for UltraStar (1080p is enough)",
@@ -123,6 +127,7 @@
     "NAMING_VIDEO": "Video file name: {file} → {expected}",
     "NAMING_COVER": "Cover file name: {file} → {expected}",
     "NAMING_BACKGROUND": "Background file name: {file} → {expected}",
+    "NAMING_BACKGROUND_IS_COVER": "The background is the same image as the cover ({file}) and the folder has no other image: the #BACKGROUND entry will be removed",
     "NAMING_VOCALS": "Vocals file name: {file} → {expected}",
     "NAMING_INSTRUMENTAL": "Instrumental file name: {file} → {expected}"
   },
@@ -213,7 +218,9 @@
     "replayGainPeak": "peak {value}",
     "singer1": "Singer 1 (P1)",
     "singer2": "Singer 2 (P2)",
-    "namingTitle": "Names do not follow the rules"
+    "namingTitle": "Names do not follow the rules",
+    "artist": "Artist",
+    "songTitle": "Title"
   },
   "edit": {
     "placeholder": "Add… (Enter)",
@@ -224,12 +231,29 @@
     "dblclickHint": "Double-click to edit",
     "editField": "Edit {field}",
     "savedField": "{field} saved: {before} → {after}. Backup: {backup}",
-    "yearPlaceholder": "YYYY"
+    "yearPlaceholder": "YYYY",
+    "identityHint": "Also applied to the other .txt files of the folder (solo, duet…) and to the playlists that list the song. Scores already saved in UltraStar stay under the old name.",
+    "identityPropagated": "Also updated: {txt} other .txt file(s), {playlists} playlist(s).",
+    "identityFailed": "Not updated (check them): {files}."
   },
   "encoding": {
     "convert": "Convert to UTF-8",
     "hint": "Rewrites the file in UTF-8 without BOM: same text and line endings, dated backup first.",
     "converted": "File converted from {from} to UTF-8 (without BOM). Backup: {backup}"
+  },
+  "textRepair": {
+    "show": "Preview the repair",
+    "hint": "The text was saved with the wrong encoding. The repair restores the right characters; nothing is written until you confirm, dated backup first.",
+    "preview": {
+      "one": "{count} line will be fixed:",
+      "other": "{count} lines will be fixed:"
+    },
+    "line": "Line {line}",
+    "apply": "Repair",
+    "done": {
+      "one": "{count} line fixed. Backup: {backup}",
+      "other": "{count} lines fixed. Backup: {backup}"
+    }
   },
   "bulk": {
     "title": "Bulk corrections",
@@ -282,6 +306,27 @@
       "summary": "Batch finished: {converted} converted, {errors} error(s).",
       "stopped": "Batch stopped: {converted} converted, {errors} error(s), {skipped} not processed.",
       "isAudio": "also the music (#MP3): create the MP3 from the details window first"
+    },
+    "audio": {
+      "tab": "Music in the video",
+      "title": "Create the MP3 of videos used as music",
+      "hint": "Songs whose #MP3 is the video file. The music is extracted to an MP3 next to the video, then #MP3 points to it; the video is not changed (it can be converted afterwards). Runs in the background: you can close this window.",
+      "none": "No song uses its video as music.",
+      "found": {
+        "one": "{count} song uses its video as music.",
+        "other": "{count} songs use their video as music."
+      },
+      "target": "MP3 created",
+      "reuse": "already there: only the .txt changes",
+      "apply": {
+        "one": "Create the MP3 of {count} song",
+        "other": "Create the MP3 of {count} songs"
+      },
+      "current": "Song {index}/{total}: {song}",
+      "stop": "Stop after the current song",
+      "stopping": "Stopping after the current song…",
+      "summary": "Batch done: {created} MP3 created, {errors} error(s).",
+      "stopped": "Batch stopped: {created} MP3 created, {errors} error(s), {skipped} not processed."
     }
   },
   "video": {
@@ -300,7 +345,7 @@
   },
   "musicbrainz": {
     "title": "MusicBrainz",
-    "intro": "Look up the year, language and genre of this song on MusicBrainz, then choose what to keep.",
+    "intro": "Look up the exact spelling of the artist and title, the year, language and genre of this song on MusicBrainz, then choose what to keep.",
     "searching": "Searching MusicBrainz…",
     "choose": "Choose the matching recording:",
     "loading": "Reading the details…",
@@ -318,7 +363,8 @@
     "otherResult": "Other result",
     "cancel": "Cancel",
     "saved": "MusicBrainz values saved. Backup: {backup}",
-    "retry": "Try again"
+    "retry": "Try again",
+    "same": "same"
   },
   "playlists": {
     "title": "Playlists",
@@ -356,6 +402,7 @@
     "MISSING_FILE": "File not found: {kind}",
     "ENCODING_NOT_UTF8": "Encoding other than UTF-8",
     "ENCODING_UTF8_BOM": "UTF-8 with BOM",
+    "ENCODING_MOJIBAKE": "Garbled characters",
     "VIDEO_NOT_H264": "Video not MP4 H.264",
     "VIDEO_TOO_LARGE": "Video larger than 1080p",
     "VIDEO_IS_AUDIO": "Same file for music and video",
@@ -414,6 +461,10 @@
       "one": "{count} item to rename",
       "other": "{count} items to rename"
     },
+    "summaryTxt": {
+      "one": "{count} .txt file to update",
+      "other": "{count} .txt files to update"
+    },
     "summaryConflicts": {
       "one": "{count} conflict to solve",
       "other": "{count} conflicts to solve"
@@ -421,6 +472,10 @@
     "apply": {
       "one": "Rename {count} item",
       "other": "Rename {count} items"
+    },
+    "applyTxt": {
+      "one": "Update {count} .txt file",
+      "other": "Update {count} .txt files"
     },
     "cancel": "Cancel",
     "done": {

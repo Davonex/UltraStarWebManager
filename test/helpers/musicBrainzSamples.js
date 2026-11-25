@@ -86,9 +86,10 @@ export const ARTIST = {
 
 /**
  * Faux `fetch` qui répond selon l'URL et garde la trace des appels.
- * @param {{ status?: number, fail?: boolean }} [options]
+ * @param {{ status?: number, fail?: boolean, emptySearches?: number }} [options]
  */
-export function fakeMusicBrainzFetch({ status = 200, fail = false } = {}) {
+export function fakeMusicBrainzFetch({ status = 200, fail = false, emptySearches = 0 } = {}) {
+  let searches = 0;
   /** @type {{ url: URL, headers: Record<string, string> }[]} */
   const calls = [];
   /** @type {typeof fetch & { calls: typeof calls }} */
@@ -98,8 +99,11 @@ export function fakeMusicBrainzFetch({ status = 200, fail = false } = {}) {
       calls.push({ url, headers: init?.headers ?? {} });
       if (fail) throw new TypeError('fetch failed');
       const path = url.pathname;
+      // Les `emptySearches` premières recherches ne trouvent rien (requêtes de repli)
       const body = path.endsWith('/recording')
-        ? SEARCH
+        ? ++searches <= emptySearches
+          ? { count: 0, recordings: [] }
+          : SEARCH
         : path.includes('/recording/')
           ? RECORDING
           : path.includes('/release-group/')

@@ -12,7 +12,7 @@
  */
 import { APP_VERSION } from '../config/index.js';
 import {
-  buildRecordingQuery,
+  buildRecordingQueries,
   buildSuggestion,
   MBID_PATTERN,
   parseRecordingSearch,
@@ -125,8 +125,18 @@ export function createMusicBrainz({
      * @returns {Promise<import('../parsers/musicBrainz.js').MbCandidate[]>}
      */
     async search(artist, title) {
-      const query = encodeURIComponent(buildRecordingQuery(artist, title));
-      return parseRecordingSearch(await get(`recording?query=${query}&limit=${SEARCH_LIMIT}`));
+      // De la plus stricte à la plus large (voir buildRecordingQueries) : une requête de plus
+      // seulement si la précédente n'a rien donné.
+      /** @type {import('../parsers/musicBrainz.js').MbCandidate[]} */
+      let candidates = [];
+      for (const query of buildRecordingQueries(artist, title)) {
+        const encoded = encodeURIComponent(query);
+        candidates = parseRecordingSearch(
+          await get(`recording?query=${encoded}&limit=${SEARCH_LIMIT}`),
+        );
+        if (candidates.length > 0) break;
+      }
+      return candidates;
     },
 
     /**
