@@ -285,6 +285,20 @@ describe('sortSongs', () => {
     assert.equal(titles(sortSongs(SONGS, 'year-desc', 'fr')).at(-1), 'Sans année');
   });
 
+  it('par date d’ajout (création du dossier), indépendante des modifications', () => {
+    const songs = [
+      song({ title: 'Ancienne modifiée', artist: 'A', addedAt: 10, modifiedAt: 99 }),
+      song({ title: 'Nouvelle copiée', artist: 'B', addedAt: 50, modifiedAt: 1 }),
+      song({ title: 'Moyenne', artist: 'C', addedAt: 30, modifiedAt: 2 }),
+    ];
+    assert.deepEqual(titles(sortSongs(songs, 'added', 'fr')), [
+      'Nouvelle copiée',
+      'Moyenne',
+      'Ancienne modifiée',
+    ]);
+    assert.equal(titles(sortSongs(songs, 'recent', 'fr'))[0], 'Ancienne modifiée');
+  });
+
   it('par date de modification, sans modifier la liste d’origine', () => {
     const copy = [...SONGS];
     assert.deepEqual(titles(sortSongs(SONGS, 'recent', 'fr')).slice(0, 3), [

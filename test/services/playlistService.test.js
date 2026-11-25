@@ -1,5 +1,6 @@
 // @ts-check
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { createCatalog } from '../../src/services/catalogService.js';
@@ -106,5 +107,50 @@ describe('createPlaylists', () => {
       logger: silentLogger,
     });
     assert.deepEqual(await absent.list(), []);
+  });
+});
+
+describe('createPlaylists — renommage d’une chanson dans les playlists', () => {
+  it('lignes renommées (encodage et fins de ligne gardés, sauvegarde), autres fichiers intacts', async () => {
+    const dir = await createSongLibrary({
+      'songs/a/a.txt': '#TITLE:Zen\n#ARTIST:Zazie\n#MP3:a.mp3\n#BPM:300\n: 0 1 0 la\nE\n',
+      'playlists/top.upl': Buffer.from(
+        '#Name: Top\r\nZazie : zen\r\nÉdith Piaf : Hymne\r\n',
+        'latin1',
+      ),
+      'playlists/autre.upl': 'Desireless : Voyage Voyage\n',
+    });
+    try {
+      const catalog = createCatalog({
+        songDir: path.join(dir.root, 'songs'),
+        logger: silentLogger,
+      });
+      await catalog.load();
+      const playlists = createPlaylists({
+        playlistDir: path.join(dir.root, 'playlists'),
+        catalog,
+        backupDir: path.join(dir.root, 'backups'),
+        logger: silentLogger,
+      });
+      const result = await playlists.renameSongEntries([
+        { from: { artist: 'Zazie', title: 'Zen' }, to: { artist: 'Zazie', title: 'Zen (Live)' } },
+      ]);
+      assert.deepEqual(
+        result.updated.map((u) => u.file),
+        ['top.upl'],
+      );
+      assert.deepEqual(result.failed, []);
+      assert.deepEqual(
+        await readFile(path.join(dir.root, 'playlists/top.upl')),
+        Buffer.from('#Name: Top\r\nZazie : Zen (Live)\r\nÉdith Piaf : Hymne\r\n', 'latin1'),
+      );
+      assert.equal(
+        await readFile(path.join(dir.root, 'playlists/autre.upl'), 'utf8'),
+        'Desireless : Voyage Voyage\n',
+      );
+      assert.ok(result.updated[0].backup);
+    } finally {
+      await dir.cleanup();
+    }
   });
 });

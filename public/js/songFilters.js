@@ -11,7 +11,7 @@
 
 /** @typedef {import('./api.js').Song} Song */
 
-/** @typedef {'artist' | 'title' | 'year-desc' | 'year-asc' | 'recent'} SortKey */
+/** @typedef {'artist' | 'title' | 'year-desc' | 'year-asc' | 'added' | 'recent'} SortKey */
 
 /** @typedef {'language' | 'decade' | 'genre' | 'edition' | 'tag' | 'playlist' | 'warning'} FacetKey */
 
@@ -49,7 +49,14 @@ export const FACET_KEYS = Object.freeze([
 ]);
 
 /** @type {readonly SortKey[]} */
-export const SORT_KEYS = Object.freeze(['artist', 'title', 'year-desc', 'year-asc', 'recent']);
+export const SORT_KEYS = Object.freeze([
+  'artist',
+  'title',
+  'year-desc',
+  'year-asc',
+  'added',
+  'recent',
+]);
 
 /** @returns {FilterCriteria} Critères vides (nouvel objet à chaque appel). */
 export function defaultCriteria() {
@@ -270,6 +277,8 @@ export function sortSongs(songs, sort, locale) {
       (b.year ?? -NO_YEAR) - (a.year ?? -NO_YEAR) || byArtist(a, b) || byTitle(a, b),
     'year-asc': (a, b) =>
       (a.year ?? NO_YEAR) - (b.year ?? NO_YEAR) || byArtist(a, b) || byTitle(a, b),
+    // Ajoutées : création du dossier ; modifiées : dernière écriture du .txt.
+    added: (a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0) || byArtist(a, b) || byTitle(a, b),
     recent: (a, b) => b.modifiedAt - a.modifiedAt || byArtist(a, b),
   };
   return [...songs].sort(comparators[sort] ?? comparators.artist);

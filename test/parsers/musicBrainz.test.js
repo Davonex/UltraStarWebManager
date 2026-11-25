@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  artistWords,
+  buildRecordingQueries,
   buildRecordingQuery,
   buildSuggestion,
   genreLabel,
@@ -23,6 +25,32 @@ describe('MusicBrainz — petites fonctions', () => {
   it('requête Lucene : titre et artiste entre guillemets, guillemets échappés', () => {
     assert.equal(buildRecordingQuery('Zazie', 'Zen'), 'recording:"Zen" AND artist:"Zazie"');
     assert.equal(buildRecordingQuery('A', 'Say "hi"'), 'recording:"Say \\"hi\\"" AND artist:"A"');
+  });
+
+  it('mots d’un artiste : sans « et », « & », « feat. »…', () => {
+    assert.deepEqual(artistWords('Stone et Charden'), ['Stone', 'Charden']);
+    assert.deepEqual(artistWords('Grand Corps Malade feat. Camille Lellouche'), [
+      'Grand',
+      'Corps',
+      'Malade',
+      'Camille',
+      'Lellouche',
+    ]);
+    assert.deepEqual(artistWords('AC/DC'), ['AC', 'DC']);
+    assert.deepEqual(artistWords('Céline Dion & Garou'), ['Céline', 'Dion', 'Garou']);
+  });
+
+  it('requêtes de la plus stricte à la plus large, marque de duo retirée', () => {
+    assert.deepEqual(buildRecordingQueries('Stone et Charden', 'Le prix des allumettes (duo)'), [
+      'recording:"Le prix des allumettes (duo)" AND artist:"Stone et Charden"',
+      'recording:"Le prix des allumettes" AND artist:(Stone AND Charden)',
+      'recording:"Le prix des allumettes" AND artist:(Stone OR Charden)',
+    ]);
+    // Un seul mot : les requêtes 2 et 3 sont identiques (une seule gardée)
+    assert.deepEqual(buildRecordingQueries('Zazie', 'Zen [DUET]'), [
+      'recording:"Zen [DUET]" AND artist:"Zazie"',
+      'recording:"Zen" AND artist:(Zazie)',
+    ]);
   });
 
   it('année d’une date complète ou partielle', () => {
@@ -74,6 +102,8 @@ describe('parseRecordingSearch', () => {
 describe('buildSuggestion', () => {
   it('année, langue la plus fréquente d’abord, genres enregistrement → album → artiste sans doublon', () => {
     assert.deepEqual(buildSuggestion(RECORDING, { releaseGroup: RELEASE_GROUP, artist: ARTIST }), {
+      artist: 'Zazie',
+      title: 'Zen',
       year: 1995,
       languages: [
         { code: 'fra', name: 'French' },
@@ -84,6 +114,12 @@ describe('buildSuggestion', () => {
   });
 
   it('sans album ni artiste, et réponse incomplète : rien ne plante', () => {
-    assert.deepEqual(buildSuggestion({}), { year: null, languages: [], genres: [] });
+    assert.deepEqual(buildSuggestion({}), {
+      artist: null,
+      title: null,
+      year: null,
+      languages: [],
+      genres: [],
+    });
   });
 });

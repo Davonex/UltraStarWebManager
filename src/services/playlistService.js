@@ -16,6 +16,7 @@ import {
   addPlaylistEntry,
   parseUltrastarPlaylist,
   removePlaylistEntry,
+  renamePlaylistEntry,
 } from '../parsers/ultrastarPlaylist.js';
 import { decodeSongBuffer } from '../parsers/ultrastarTxt.js';
 import { resolveInside } from '../utils/safePath.js';
@@ -257,6 +258,55 @@ export function createPlaylists({ playlistDir, catalog, backupDir = null, logger
      */
     removeSong: (file, songId, expectedModifiedAt) =>
       changeSong('remove', file, songId, expectedModifiedAt),
+
+    /**
+     * Met à jour le nom des chansons dans toutes les playlists, après la modification de
+     * l'artiste ou du titre (« Ancien artiste : Ancien titre » → nouveau nom). Chaque playlist
+     * modifiée est sauvegardée avant ; une playlist impossible à écrire est signalée.
+     *
+     * @param {{ from: { artist: string, title: string }, to: { artist: string, title: string } }[]} renames
+     * @returns {Promise<{ updated: { file: string, backup: string }[], failed: { file: string, code: string }[] }>}
+     */
+    async renameSongEntries(renames) {
+      /** @type {{ file: string, backup: string }[]} */
+      const updated = [];
+      /** @type {{ file: string, code: string }[]} */
+      const failed = [];
+      if (!backupDir || renames.length === 0) return { updated, failed };
+      /** @param {{ artist: string, title: string }} a @param {{ artist: string, title: string }} b */
+      const same = (a, b) => songMatchKey(a.artist, a.title) === songMatchKey(b.artist, b.title);
+      for (const file of await listFiles()) {
+        const fullPath = path.join(/** @type {string} */ (playlistDir), file);
+        try {
+          const { text, encoding } = decodeSongBuffer(await readFile(fullPath));
+          let next = text;
+          let replaced = 0;
+          for (const { from, to } of renames) {
+            const result = renamePlaylistEntry(next, from, to, same);
+            next = result.text;
+            replaced += result.replaced;
+          }
+          if (replaced === 0) continue;
+          const data = encodeSongText(next, encoding);
+          const backup = await backupFile({
+            file: fullPath,
+            relativePath: `${BACKUP_FOLDER}/${file}`,
+            backupDir,
+          });
+          await writeFileAtomic(fullPath, data);
+          logger.info(`Playlist ${file}: ${replaced} song name(s) updated (backup: ${backup})`);
+          updated.push({ file, backup });
+        } catch (error) {
+          const code =
+            error instanceof UnencodableCharacterError
+              ? 'UNENCODABLE_CHARACTER'
+              : 'PLAYLIST_WRITE_FAILED';
+          logger.warn(`Playlist ${file} not updated: ${/** @type {Error} */ (error).message}`);
+          failed.push({ file, code });
+        }
+      }
+      return { updated, failed };
+    },
 
     /**
      * Une playlist relue après modification (null si introuvable).

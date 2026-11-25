@@ -107,6 +107,63 @@ export function createBulkController(catalog, editor, videos) {
     },
 
     /**
+     * POST /api/bulk/extract-audio — création du MP3 des vidéos qui servent aussi de musique
+     * (#MP3 = #VIDEO), par lot.
+     *
+     * - `{ dryRun: true }` → `{ data: { available, items: [{ id, artist, title, file, target,
+     *   reuse, modifiedAt }] } }`
+     * - `{ items: [{ id, expectedModifiedAt }] }` (au plus 200) → `202 { data: { batch } }`.
+     *
+     * @param {import('express').Request} req
+     * @param {import('express').Response} res
+     */
+    async extractAudio(req, res) {
+      if (!ensureReady(res)) return;
+      const { dryRun, items } = req.body ?? {};
+      if (dryRun === true) {
+        res.json({ data: await videos.listAudioCandidates() });
+        return;
+      }
+      if (!isValidItems(items)) {
+        res.status(400).json({
+          error: {
+            code: 'INVALID_REQUEST',
+            message: `Expected dryRun: true, or 1 to ${MAX_BULK_ITEMS} items { id, expectedModifiedAt }`,
+          },
+        });
+        return;
+      }
+      try {
+        const batch = await videos.startBatch(
+          items.map(({ id, expectedModifiedAt }) => ({ id, expectedModifiedAt })),
+          'audio',
+        );
+        res.status(202).json({ data: { batch } });
+      } catch (error) {
+        if (!(error instanceof SongEditError)) throw error;
+        res.status(error.status).json({ error: { code: error.code, message: error.message } });
+      }
+    },
+
+    /**
+     * GET /api/bulk/extract-audio — état du lot de création des MP3 : `{ data: { batch } }`.
+     * @param {import('express').Request} _req
+     * @param {import('express').Response} res
+     */
+    getAudioBatch(_req, res) {
+      res.json({ data: { batch: videos.getBatch('audio') } });
+    },
+
+    /**
+     * POST /api/bulk/extract-audio/stop — arrête le lot après la chanson en cours.
+     * @param {import('express').Request} _req
+     * @param {import('express').Response} res
+     */
+    stopAudioBatch(_req, res) {
+      res.json({ data: { batch: videos.stopBatch('audio') } });
+    },
+
+    /**
      * POST /api/bulk/convert-utf8 — convertit des fichiers en UTF-8 sans BOM.
      *
      * - `{ dryRun: true }` → `{ data: { items: [{ id, artist, title, file, from, modifiedAt }] } }`

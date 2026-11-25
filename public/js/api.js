@@ -39,6 +39,7 @@
  * @property {ReplayGain | null} [replayGain]  Tags ReplayGain du fichier audio (MP3).
  * @property {string[]} [playlists]  Noms des playlists qui la contiennent (ajouté par main.js).
  * @property {number} modifiedAt
+ * @property {number} [addedAt]  Date d’ajout (création du dossier de la chanson).
  */
 
 /** Erreur d'API portant un code traduisible. */
@@ -250,8 +251,13 @@ export const getSongDetails = (id) => getJson(`/songs/${encodeURIComponent(id)}`
  * le serveur renvoie seulement les changements qu'il ferait.
  *
  * @param {string} id
+ * Artiste ou titre modifié : `related` (autres .txt du dossier) et `playlists` (.upl mises
+ * à jour) indiquent ce qui a suivi.
+ *
  * @param {{ values: Record<string, string | null>, expectedModifiedAt: number, dryRun?: boolean }} body
- * @returns {Promise<{ data: { changes: HeaderChange[], song: Song, backup: string | null } }>}
+ * @returns {Promise<{ data: { changes: HeaderChange[], song: Song, backup: string | null,
+ *   related?: { updated: { txtFile: string, backup: string | null }[], failed: { txtFile: string, code: string }[] },
+ *   playlists?: { updated: { file: string, backup: string }[], failed: { file: string, code: string }[] } } }>}
  */
 export const updateSongHeaders = (id, body) =>
   requestJson(`/songs/${encodeURIComponent(id)}/headers`, {
@@ -268,6 +274,17 @@ export const updateSongHeaders = (id, body) =>
  */
 export const convertSongToUtf8 = (id, body) =>
   postJson(`/songs/${encodeURIComponent(id)}/convert-utf8`, body);
+
+/**
+ * Répare les caractères mal encodés d'une chanson (« Ã© » → « é »), niveau écriture.
+ * `dryRun: true` : liste seulement les lignes qui seraient modifiées.
+ * @param {string} id
+ * @param {{ expectedModifiedAt: number, dryRun?: boolean }} body
+ * @returns {Promise<{ data: { changes: { line: number, before: string, after: string }[],
+ *   song: Song, backup: string | null } }>}
+ */
+export const repairSongText = (id, body) =>
+  postJson(`/songs/${encodeURIComponent(id)}/repair-text`, body);
 
 /**
  * @typedef {object} BulkCandidate  Fichier concerné par une correction en masse (simulation).
@@ -351,7 +368,8 @@ export const getVideoJob = (id) => getJson(`/songs/${encodeURIComponent(id)}/con
  */
 
 /**
- * @typedef {object} VideoBatch  Lot de conversions vidéo.
+ * @typedef {object} VideoBatch  Lot de traitements ffmpeg (vidéos, ou création des MP3).
+ * @property {'video' | 'audio'} kind
  * @property {'running' | 'done' | 'stopped'} state
  * @property {boolean} stopRequested
  * @property {{ id: string, artist: string | null, title: string | null,
@@ -374,6 +392,31 @@ export const getVideoBatch = () => getJson('/bulk/convert-video');
 export const stopVideoBatch = () => postJson('/bulk/convert-video/stop', {});
 
 /**
+ * @typedef {object} AudioCandidate  Chanson dont la vidéo sert aussi de musique (#MP3 = #VIDEO).
+ * @property {string} id
+ * @property {string | null} artist
+ * @property {string | null} title
+ * @property {string} file    « dossier/vidéo ».
+ * @property {string} target  MP3 qui sera créé.
+ * @property {boolean} reuse  Le MP3 existe déjà : seul le .txt change.
+ * @property {number} modifiedAt
+ */
+
+/**
+ * Création des MP3 en masse (niveau écriture) : simulation avec `{ dryRun: true }`,
+ * sinon lancement d'un lot (au plus 200) traité en tâche de fond.
+ * @param {{ dryRun: true } | { items: { id: string, expectedModifiedAt: number }[] }} body
+ * @returns {Promise<{ data: { available?: boolean, items?: AudioCandidate[], batch?: VideoBatch } }>}
+ */
+export const bulkExtractAudio = (body) => postJson('/bulk/extract-audio', body);
+
+/** @returns {Promise<{ data: { batch: VideoBatch | null } }>} Lot en cours ou dernier lot. */
+export const getAudioBatch = () => getJson('/bulk/extract-audio');
+
+/** @returns {Promise<{ data: { batch: VideoBatch | null } }>} Arrêt après la chanson en cours. */
+export const stopAudioBatch = () => postJson('/bulk/extract-audio/stop', {});
+
+/**
  * @typedef {object} MbCandidate  Enregistrement trouvé sur MusicBrainz.
  * @property {string} id
  * @property {string} title
@@ -387,6 +430,8 @@ export const stopVideoBatch = () => postJson('/bulk/convert-video/stop', {});
 
 /**
  * @typedef {object} MbSuggestion  Valeurs proposées par MusicBrainz.
+ * @property {string | null} artist  Écriture exacte de MusicBrainz.
+ * @property {string | null} title   Avec la marque de duo de la chanson, s'il y en a une.
  * @property {number | null} year
  * @property {{ code: string, name: string }[]} languages
  * @property {string[]} genres

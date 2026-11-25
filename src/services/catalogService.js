@@ -70,6 +70,9 @@ const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
  * @property {import('../parsers/replayGain.js').ReplayGain | null} replayGain  Tags ReplayGain du
  *   fichier audio (MP3 seulement ; null si absents ou autre format).
  * @property {number} modifiedAt      Date de modification du .txt (ms).
+ * @property {number} addedAt         Date d'ajout dans la bibliothèque (ms) : création du dossier
+ *   de la chanson (une copie sous Windows la met à l'heure de la copie, alors que la date de
+ *   modification des fichiers copiés reste l'ancienne). Date de modification à défaut.
  */
 
 /**
@@ -183,10 +186,19 @@ export function songId(relativePath) {
  * @param {string[]} input.fileNames
  * @param {import('../parsers/ultrastarTxt.js').ParsedSong} input.parsed
  * @param {number} input.modifiedAt
+ * @param {number} [input.addedAt]  Date d'ajout (défaut : modifiedAt).
  * @param {import('../parsers/naming.js').NamingRules} [input.naming]  Modèles de nommage.
  * @returns {Song}
  */
-export function buildSong({ relativeDir, txtFile, fileNames, parsed, modifiedAt, naming }) {
+export function buildSong({
+  relativeDir,
+  txtFile,
+  fileNames,
+  parsed,
+  modifiedAt,
+  addedAt = modifiedAt,
+  naming,
+}) {
   const { meta, stats, encoding } = parsed;
   const filesByKey = new Map(fileNames.map((name) => [fileNameKey(name), name]));
   const warnings = [...parsed.warnings];
@@ -239,6 +251,7 @@ export function buildSong({ relativeDir, txtFile, fileNames, parsed, modifiedAt,
       folderName: path.basename(relativeDir),
       txtFile,
       isDuet: stats.isDuet,
+      fileNames,
       files: {
         ...files,
         vocals: findFile(filesByKey, parsed.headers.VOCALS),
@@ -284,6 +297,7 @@ export function buildSong({ relativeDir, txtFile, fileNames, parsed, modifiedAt,
     encoding,
     warnings,
     modifiedAt,
+    addedAt,
   };
 }
 
@@ -409,7 +423,11 @@ export function createCatalog({ songDir, logger = console, getNaming = () => DEF
   async function readSong(root, { relativeDir, fileNames }, txtFile) {
     const fullPath = path.join(root, relativeDir, txtFile);
     try {
-      const [buffer, info] = await Promise.all([readFile(fullPath), stat(fullPath)]);
+      const [buffer, info, folderInfo] = await Promise.all([
+        readFile(fullPath),
+        stat(fullPath),
+        stat(path.join(root, relativeDir)).catch(() => null),
+      ]);
       const parsed = parseUltrastarTxt(buffer);
       if (!parsed.headers.TITLE && !parsed.headers.ARTIST) {
         return { skipped: 'Not an UltraStar file (no #TITLE / #ARTIST)' };
@@ -420,6 +438,9 @@ export function createCatalog({ songDir, logger = console, getNaming = () => DEF
         fileNames,
         parsed,
         modifiedAt: info.mtimeMs,
+        // Création du dossier (0 si le système ne la fournit pas). Pas celle du .txt : chaque
+        // écriture atomique de l'outil recrée le fichier.
+        addedAt: folderInfo?.birthtimeMs || info.mtimeMs,
         naming: getNaming(),
       });
       const folder = path.join(root, relativeDir);

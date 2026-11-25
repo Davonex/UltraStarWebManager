@@ -75,6 +75,8 @@ describe('MusicBrainz — routes', () => {
       const suggested = await app.get(`/api/songs/${zen.id}/musicbrainz/${RECORDING_ID}?${query}`);
       assert.equal(suggested.status, 200);
       assert.equal(suggested.json.data.suggestion.year, 1995);
+      assert.equal(suggested.json.data.suggestion.artist, 'Zazie');
+      assert.equal(suggested.json.data.suggestion.title, 'Zen');
 
       // L'utilisateur garde l'année et la langue, et choisit un genre
       const saved = await app.patch(zen.id, {

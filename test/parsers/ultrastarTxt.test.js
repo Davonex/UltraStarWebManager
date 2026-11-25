@@ -195,6 +195,11 @@ describe('avertissement d’encodage (format 1.1.0 : UTF-8 sans BOM)', () => {
     assert.deepEqual(codes(parseUltrastarTxt(bom)), ['ENCODING_UTF8_BOM']);
   });
 
+  it('texte mal encodé (« Ã© ») : ENCODING_MOJIBAKE', () => {
+    const garbled = SONG.replace('#ARTIST:', '#ARTIST:Ã©');
+    assert.deepEqual(codes(parseUltrastarTxt(Buffer.from(garbled, 'utf8'))), ['ENCODING_MOJIBAKE']);
+  });
+
   it('texte déjà décodé : pas d’avertissement d’encodage', () => {
     assert.deepEqual(codes(parseUltrastarTxt(SONG)), []);
   });

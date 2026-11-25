@@ -8,6 +8,7 @@
  *
  * @module parsers/ultrastarTxt
  */
+import { countMojibake } from './mojibake.js';
 
 /**
  * @typedef {object} SongMeta Métadonnées normalisées d'une chanson.
@@ -263,6 +264,12 @@ export function parseUltrastarTxt(input) {
     );
   } else if (encoding === 'utf-8-bom') {
     warnings.push(songWarning('ENCODING_UTF8_BOM', 'UTF-8 with BOM: UTF-8 without BOM expected'));
+  }
+  // Texte UTF-8 relu en Windows-1252 puis réenregistré (« Ã© » au lieu de « é »).
+  if (countMojibake(text) > 0) {
+    warnings.push(
+      songWarning('ENCODING_MOJIBAKE', 'Garbled characters (e.g. "Ã©" instead of "é")'),
+    );
   }
 
   return { meta, headers, stats, encoding, warnings };

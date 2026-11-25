@@ -24,6 +24,27 @@ describe('musicBrainzService', () => {
     assert.match(headers['User-Agent'], /^UltraStarWebManager\/.+\(.+\)$/);
   });
 
+  it('rien au mot près : requête de repli par mots (« et » ignoré), arrêt dès un résultat', async () => {
+    const fetch = fakeMusicBrainzFetch({ emptySearches: 1 });
+    const mb = createMusicBrainz({ fetch, minIntervalMs: 0, logger: silentLogger });
+    const candidates = await mb.search('Stone et Charden', 'Le prix des allumettes');
+    assert.equal(candidates[0].id, RECORDING_ID);
+    assert.deepEqual(
+      fetch.calls.map((c) => c.url.searchParams.get('query')),
+      [
+        'recording:"Le prix des allumettes" AND artist:"Stone et Charden"',
+        'recording:"Le prix des allumettes" AND artist:(Stone AND Charden)',
+      ],
+    );
+  });
+
+  it('rien du tout : les trois requêtes sont essayées, liste vide', async () => {
+    const fetch = fakeMusicBrainzFetch({ emptySearches: 9 });
+    const mb = createMusicBrainz({ fetch, minIntervalMs: 0, logger: silentLogger });
+    assert.deepEqual(await mb.search('A et B', 'T'), []);
+    assert.equal(fetch.calls.length, 3);
+  });
+
   it('au plus une requête par intervalle, et cache : pas de requête répétée', async () => {
     const fetch = fakeMusicBrainzFetch();
     const mb = createMusicBrainz({ fetch, minIntervalMs: 120, logger: silentLogger });

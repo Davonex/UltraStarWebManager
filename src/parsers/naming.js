@@ -23,8 +23,37 @@
  * ou remplacé par un tiret, une espace ou un « _ » (« AC/DC » → « AC-DC » ou « ACDC ») ; une
  * marque de duo en fin de titre (« [DUET] », « (Duet) », « - DUO ») est ignorée.
  *
+ * Cas particulier : quand #BACKGROUND désigne la même image que #COVER, le nom suit le modèle
+ * de la pochette (prioritaire) ; s'il n'y a aucune autre image dans le dossier, l'entrée
+ * #BACKGROUND est inutile et signalée (le renommage la retire).
+ *
  * @module parsers/naming
  */
+import { fileNameKey } from '../utils/text.js';
+
+/** Extensions d'images (pochette, fond). */
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif']);
+
+/** @param {string} name */
+export function isImageFile(name) {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 && IMAGE_EXTENSIONS.has(name.slice(dot).toLowerCase());
+}
+
+/**
+ * Le fond est-il la même image que la pochette, sans autre image dans le dossier ?
+ * Dans ce cas l'entrée #BACKGROUND n'apporte rien : la pochette est prioritaire.
+ * @param {string | null | undefined} cover       Fichier de la pochette.
+ * @param {string | null | undefined} background  Fichier du fond.
+ * @param {string[]} fileNames  Fichiers du dossier.
+ */
+export function isRedundantBackground(cover, background, fileNames) {
+  if (!cover || !background || fileNameKey(cover) !== fileNameKey(background)) return false;
+  return !fileNames.some(
+    (name) =>
+      !name.startsWith('.') && isImageFile(name) && fileNameKey(name) !== fileNameKey(cover),
+  );
+}
 
 /** Caractères interdits dans un nom de fichier Windows. */
 const FORBIDDEN = /[\\/:*?"<>|]/g;
@@ -83,9 +112,10 @@ const WARNING_KINDS = Object.freeze({
 
 /**
  * @typedef {object} NamingProblem
- * @property {'FOLDER' | 'TXT' | 'AUDIO' | 'VIDEO' | 'COVER' | 'BACKGROUND' | 'VOCALS' | 'INSTRUMENTAL'} kind
+ * @property {'FOLDER' | 'TXT' | 'AUDIO' | 'VIDEO' | 'COVER' | 'BACKGROUND' | 'VOCALS' | 'INSTRUMENTAL'
+ *   | 'BACKGROUND_IS_COVER'} kind  BACKGROUND_IS_COVER : #BACKGROUND = #COVER, entrée à retirer.
  * @property {string} actual    Nom actuel.
- * @property {string} expected  Nom attendu (avec l'extension actuelle).
+ * @property {string} expected  Nom attendu (avec l'extension actuelle ; '' : entrée à retirer).
  */
 
 /**
@@ -128,6 +158,14 @@ const DUET_MARK = /\s*(?:[[(]\s*du(?:et|o)\s*[\])]|-\s*du(?:et|o))\s*$/i;
  */
 export function titleWithoutDuetMark(title) {
   return title.replace(DUET_MARK, '');
+}
+
+/**
+ * Marque de duo en fin de titre, espaces compris (« Tonight [DUET] » → « [DUET] » ; '' sans).
+ * @param {string} title
+ */
+export function duetMarkOf(title) {
+  return DUET_MARK.exec(title)?.[0] ?? '';
 }
 
 /**
@@ -194,11 +232,12 @@ function splitName(file) {
  * @param {boolean} song.isDuet
  * @param {Partial<Record<'audio' | 'video' | 'cover' | 'background' | 'vocals' | 'instrumental', string | null>>} song.files
  *   Noms des fichiers (absent ou null : non vérifié).
+ * @param {string[]} [song.fileNames]  Fichiers du dossier (fond = pochette : autre image ?).
  * @param {NamingRules} [rules]  Modèles (préférences) ; par défaut DEFAULT_NAMING.
  * @returns {NamingProblem[]}
  */
 export function checkNaming(
-  { artist, title, folderName, txtFile, isDuet, files },
+  { artist, title, folderName, txtFile, isDuet, files, fileNames = [] },
   rules = DEFAULT_NAMING,
 ) {
   if (!artist?.trim() || !title?.trim()) return []; // déjà signalé (en-tête manquant)
@@ -230,7 +269,17 @@ export function checkNaming(
   // Vidéo qui sert aussi de musique : déjà vérifiée comme audio.
   if (files.video !== files.audio) check('video', files.video, true);
   check('cover', files.cover, true);
-  check('background', files.background, true);
+  // Fond = pochette : le nom suit le modèle de la pochette (déjà vérifié) ; sans autre image
+  // dans le dossier, l'entrée #BACKGROUND est inutile.
+  const sharedBackground =
+    files.cover && files.background && fileNameKey(files.cover) === fileNameKey(files.background);
+  if (!sharedBackground) check('background', files.background, true);
+  else if (
+    rules.background?.enabled &&
+    isRedundantBackground(files.cover, files.background, fileNames)
+  ) {
+    problems.push({ kind: 'BACKGROUND_IS_COVER', actual: files.background ?? '', expected: '' });
+  }
   check('vocals', files.vocals, true);
   check('instrumental', files.instrumental, true);
   return problems;

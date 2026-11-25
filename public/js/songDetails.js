@@ -16,6 +16,7 @@ import {
   extractSongAudio,
   getSongDetails,
   getVideoJob,
+  repairSongText,
   songReplayGain,
   updateSongHeaders,
 } from './api.js';
@@ -63,7 +64,7 @@ const SHOWN_HEADERS = new Set([
 ]);
 
 /** @typedef {import('./api.js').Song} Song */
-/** @typedef {'EDITION' | 'TAGS' | 'CREATOR' | 'LANGUAGE' | 'GENRE' | 'YEAR' | 'P1' | 'P2'} EditableHeader */
+/** @typedef {'ARTIST' | 'TITLE' | 'EDITION' | 'TAGS' | 'CREATOR' | 'LANGUAGE' | 'GENRE' | 'YEAR' | 'P1' | 'P2'} EditableHeader */
 
 /** Avertissements corrigeables par une conversion en UTF-8. */
 const ENCODING_WARNINGS = new Set(['ENCODING_NOT_UTF8', 'ENCODING_UTF8_BOM']);
@@ -92,6 +93,8 @@ function videoFormat(video) {
 }
 
 const EDIT_LABELS = Object.freeze({
+  ARTIST: 'details.artist',
+  TITLE: 'details.songTitle',
   EDITION: 'filters.edition',
   TAGS: 'filters.tag',
   CREATOR: 'details.creator',
@@ -102,7 +105,29 @@ const EDIT_LABELS = Object.freeze({
   P2: 'details.singer2',
 });
 /** Champs à une seule valeur : saisie simple au lieu des pastilles. */
-const SINGLE_VALUE_FIELDS = new Set(['YEAR', 'P1', 'P2']);
+const SINGLE_VALUE_FIELDS = new Set(['ARTIST', 'TITLE', 'YEAR', 'P1', 'P2']);
+/** Artiste et titre : aussi appliqués aux autres .txt du dossier et aux playlists. */
+const IDENTITY_FIELDS = new Set(['ARTIST', 'TITLE']);
+
+/**
+ * Phrase « aussi mis à jour : … » après un changement d'artiste ou de titre ('' sinon).
+ * @param {{ related?: { updated: unknown[], failed: { txtFile: string }[] },
+ *   playlists?: { updated: unknown[], failed: { file: string }[] } }} result
+ */
+export function propagationText(result) {
+  const txt = result.related?.updated.length ?? 0;
+  const playlists = result.playlists?.updated.length ?? 0;
+  const failed = [
+    ...(result.related?.failed.map((f) => f.txtFile) ?? []),
+    ...(result.playlists?.failed.map((f) => f.file) ?? []),
+  ];
+  return [
+    txt + playlists > 0 ? t('edit.identityPropagated', { txt, playlists }) : '',
+    failed.length > 0 ? t('edit.identityFailed', { files: failed.join(', ') }) : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
 /** @typedef {import('./api.js').SongDetails} SongDetails */
 
 /**
@@ -213,6 +238,9 @@ export function createSongDetailsView(
   /** ReplayGain mesuré, en attente de confirmation. */
   /** @type {{ trackGain: number, trackPeak: number, audioModifiedAt: number } | null} */
   let gainMeasure = null;
+  /** Réparation du texte simulée (lignes modifiées), en attente de confirmation. */
+  /** @type {{ line: number, before: string, after: string }[] | null} */
+  let textRepair = null;
 
   /**
    * Fenêtre MusicBrainz (YEAR / GENRE / LANGUAGE) : la fenêtre info se ferme le temps du
@@ -226,7 +254,12 @@ export function createSongDetailsView(
           const notice = applied
             ? {
                 kind: /** @type {const} */ ('success'),
-                text: t('musicbrainz.saved', { backup: applied.backup ?? '—' }),
+                text: [
+                  t('musicbrainz.saved', { backup: applied.backup ?? '—' }),
+                  propagationText(applied),
+                ]
+                  .filter(Boolean)
+                  .join(' '),
               }
             : null;
           openDetails(song, notice);
@@ -460,6 +493,96 @@ export function createSongDetailsView(
       };
       const fresh = await getSongDetails(data.song.id);
       details = fresh.data.details;
+    } catch (error) {
+      message = { kind: 'danger', text: errorText(error) };
+    } finally {
+      busy = false;
+    }
+    renderHeader();
+    renderBody();
+  }
+
+  // --- Caractères mal encodés (« Ã© » au lieu de « é ») : aperçu puis réparation ------
+
+  /** Bloc sous l'avertissement ENCODING_MOJIBAKE. */
+  function repairBlock() {
+    const wrap = el('div', 'mt-1 mb-2');
+    /** @param {string} label @param {string} className @param {() => void} onClick @param {string} [iconName] */
+    const action = (label, className, onClick, iconName) => {
+      const node = /** @type {HTMLButtonElement} */ (el('button', `btn btn-sm ${className}`));
+      node.type = 'button';
+      node.disabled = busy;
+      if (busy && iconName) node.append(el('span', 'spinner-border spinner-border-sm me-1'));
+      else if (iconName) node.append(icon(iconName, 'bi me-1'));
+      node.append(label);
+      node.addEventListener('click', onClick);
+      return node;
+    };
+    if (textRepair) {
+      // Aperçu : chaque ligne modifiée, avant (rouge) / après (vert)
+      const diff = el('div', 'rename-diff text-repair-diff mb-2');
+      for (const change of textRepair) {
+        diff.append(
+          el('div', 'rename-diff-head small', t('textRepair.line', { line: change.line })),
+          el('div', 'rename-diff-del', `- ${change.before}`),
+          el('div', 'rename-diff-add', `+ ${change.after}`),
+        );
+      }
+      wrap.append(
+        el('small', 'd-block mb-1', t('textRepair.preview', { count: textRepair.length })),
+        diff,
+        action(t('textRepair.apply'), 'btn-warning me-2', applyTextRepair, 'check2'),
+        action(t('video.cancel'), 'btn-outline-secondary', () => {
+          textRepair = null;
+          renderBody();
+        }),
+      );
+      return wrap;
+    }
+    wrap.append(
+      action(t('textRepair.show'), 'btn-outline-warning', previewTextRepair, 'magic'),
+      el('small', 'd-block text-body-secondary mt-1', t('textRepair.hint')),
+    );
+    return wrap;
+  }
+
+  /** 1. Simulation : lignes qui seront corrigées (rien n'est écrit). */
+  async function previewTextRepair() {
+    if (!current || busy) return;
+    busy = true;
+    renderBody();
+    try {
+      const { data } = await repairSongText(current.id, {
+        expectedModifiedAt: current.modifiedAt,
+        dryRun: true,
+      });
+      textRepair = data.changes;
+      message = null;
+    } catch (error) {
+      message = { kind: 'danger', text: errorText(error) };
+    } finally {
+      busy = false;
+    }
+    renderBody();
+  }
+
+  /** 2. Réparation (sauvegarde datée côté serveur). */
+  async function applyTextRepair() {
+    if (!current || busy || !textRepair) return;
+    busy = true;
+    renderBody();
+    try {
+      const { data } = await repairSongText(current.id, {
+        expectedModifiedAt: current.modifiedAt,
+      });
+      current = data.song;
+      onSongUpdated(data.song);
+      message = {
+        kind: 'success',
+        text: t('textRepair.done', { count: data.changes.length, backup: data.backup ?? '—' }),
+      };
+      textRepair = null;
+      details = (await getSongDetails(data.song.id)).data.details;
     } catch (error) {
       message = { kind: 'danger', text: errorText(error) };
     } finally {
@@ -893,6 +1016,10 @@ export function createSongDetailsView(
     /** @param {string | null | undefined} value */
     const one = (value) => (value ? [value] : []);
     switch (header) {
+      case 'ARTIST':
+        return one(song.artist);
+      case 'TITLE':
+        return one(song.title);
       case 'EDITION':
         return song.editions;
       case 'TAGS':
@@ -997,6 +1124,10 @@ export function createSongDetailsView(
     cancel.append(icon('x-lg'));
     cancel.addEventListener('click', cancelEdit);
     actions.append(save, cancel);
+    if (IDENTITY_FIELDS.has(header)) {
+      // Prévenir : autres .txt du dossier, playlists et scores UltraStar
+      field.append(el('small', 'details-inline-hint text-body-secondary', t('edit.identityHint')));
+    }
     wrap.append(field, actions);
     queueMicrotask(() => input.focus());
   }
@@ -1066,12 +1197,17 @@ export function createSongDetailsView(
       message = change
         ? {
             kind: 'success',
-            text: t('edit.savedField', {
-              field: headerLabel(header),
-              before: change.before ?? t('edit.empty'),
-              after: change.after ?? t('edit.empty'),
-              backup: data.backup ?? '—',
-            }),
+            text: [
+              t('edit.savedField', {
+                field: headerLabel(header),
+                before: change.before ?? t('edit.empty'),
+                after: change.after ?? t('edit.empty'),
+                backup: data.backup ?? '—',
+              }),
+              propagationText(data),
+            ]
+              .filter(Boolean)
+              .join(' '),
           }
         : null;
       editing = null;
@@ -1167,6 +1303,8 @@ export function createSongDetailsView(
 
     /** @type {[string, string, Node | string][]} */
     const infoRows = [
+      ['person-fill', t('details.artist'), editableValue('ARTIST', song.artist ?? '—')],
+      ['fonts', t('details.songTitle'), editableValue('TITLE', song.title ?? '—')],
       [
         'globe2',
         t('filters.language'),
@@ -1291,6 +1429,7 @@ export function createSongDetailsView(
           el('span', '', text === key ? warning.message : text),
         );
         if (ENCODING_WARNINGS.has(warning.code) && canEdit()) item.append(convertButton());
+        if (warning.code === 'ENCODING_MOJIBAKE' && canEdit()) item.append(repairBlock());
         if (warning === videoWarning && canEdit()) item.append(videoBlock());
         if (warning.code === 'VIDEO_IS_AUDIO' && canEdit()) item.append(audioBlock());
         if (warning.code === 'REPLAYGAIN_MISSING' && canEdit()) item.append(replayGainBlock());
@@ -1347,6 +1486,7 @@ export function createSongDetailsView(
     videoPlan = null;
     audioPlan = null;
     gainMeasure = null;
+    textRepair = null;
     renderHeader();
     renderBody();
     bootstrapModal.show();

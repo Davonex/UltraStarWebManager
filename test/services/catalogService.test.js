@@ -1,5 +1,6 @@
 // @ts-check
 import assert from 'node:assert/strict';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { parseUltrastarTxt } from '../../src/parsers/ultrastarTxt.js';
@@ -34,6 +35,13 @@ describe('catalogService', () => {
       ['Duo - Test/readme.txt'],
     );
     assert.equal(byTitle('Cachée'), undefined);
+  });
+
+  it('date d’ajout : création du dossier (ou date de modification à défaut)', async () => {
+    for (const song of catalog.getSongs()) {
+      const folder = await stat(path.join(library.root, song.folder));
+      assert.equal(song.addedAt, folder.birthtimeMs || song.modifiedAt);
+    }
   });
 
   it('trie par artiste puis titre, sans tenir compte des accents', () => {

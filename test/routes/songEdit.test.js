@@ -90,6 +90,23 @@ describe('PATCH /api/songs/:id/headers — sur ce PC (admin)', () => {
     assert.equal(bad.status, 400);
   });
 
+  it('réparation du texte : rien à réparer ; corps invalide : 400', async () => {
+    const { modifiedAt } = (await request(app.baseUrl, '/api/songs')).json.data[0];
+    const ok = await request(app.baseUrl, `/api/songs/${app.song.id}/repair-text`, {
+      method: 'POST',
+      headers: { 'x-usm-request': '1' },
+      body: { expectedModifiedAt: modifiedAt, dryRun: true },
+    });
+    assert.equal(ok.status, 200);
+    assert.deepEqual(ok.json.data.changes, []);
+    const bad = await request(app.baseUrl, `/api/songs/${app.song.id}/repair-text`, {
+      method: 'POST',
+      headers: { 'x-usm-request': '1' },
+      body: { expectedModifiedAt: modifiedAt, dryRun: 'oui' },
+    });
+    assert.equal(bad.status, 400);
+  });
+
   it('409 si la date de modification ne correspond plus', async () => {
     const res = await app.patch({ values: { TAGS: 'x' }, expectedModifiedAt: 1 });
     assert.equal(res.status, 409);
@@ -105,7 +122,7 @@ describe('PATCH /api/songs/:id/headers — sur ce PC (admin)', () => {
     ]) {
       assert.equal((await app.patch(body)).status, 400, JSON.stringify(body));
     }
-    const res = await app.patch({ values: { TITLE: 'x' }, expectedModifiedAt: 1 });
+    const res = await app.patch({ values: { BPM: '120' }, expectedModifiedAt: 1 });
     assert.equal(res.json.error.code, 'HEADER_NOT_EDITABLE');
   });
 
@@ -135,6 +152,15 @@ describe('PATCH /api/songs/:id/headers — appareil du réseau', () => {
 
   it('conversion UTF-8 : 403 en lecture publique', async () => {
     const res = await request(app.baseUrl, `/api/songs/${app.song.id}/convert-utf8`, {
+      method: 'POST',
+      headers: { 'x-usm-request': '1' },
+      body: { expectedModifiedAt: app.song.modifiedAt },
+    });
+    assert.equal(res.status, 403);
+  });
+
+  it('réparation du texte : 403 en lecture publique', async () => {
+    const res = await request(app.baseUrl, `/api/songs/${app.song.id}/repair-text`, {
       method: 'POST',
       headers: { 'x-usm-request': '1' },
       body: { expectedModifiedAt: app.song.modifiedAt },

@@ -14,6 +14,7 @@ import {
   rescanCatalog,
 } from './api.js';
 import { createAuthView } from './authView.js';
+import { createBulkAudioTool } from './bulkAudioTool.js';
 import { createBulkTools } from './bulkTools.js';
 import { createBulkVideoTool } from './bulkVideoTool.js';
 import { createFiltersView } from './filtersView.js';
@@ -359,6 +360,7 @@ videoSwitch.addEventListener('change', () => {
 /** Corrections en masse : après une conversion, on recharge la liste (avertissements à jour). */
 const bulkTools = createBulkTools({ modal: byId('bulk-modal'), onDone: loadCatalog });
 const bulkVideoTool = createBulkVideoTool({ modal: byId('bulk-modal'), onDone: loadCatalog });
+const bulkAudioTool = createBulkAudioTool({ modal: byId('bulk-modal'), onDone: loadCatalog });
 /** Préférences (admin) : après enregistrement, la liste est rechargée (avertissements à jour). */
 const preferencesView = createPreferencesView({
   modal: byId('preferences-modal'),
@@ -411,6 +413,7 @@ async function init() {
     songDetails.refresh();
     bulkTools.refresh();
     bulkVideoTool.refresh();
+    bulkAudioTool.refresh();
     playlistMenu.refresh();
     preferencesView.refresh();
     renderStatus();

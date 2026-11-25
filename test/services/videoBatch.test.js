@@ -1,6 +1,6 @@
 // @ts-check
 import assert from 'node:assert/strict';
-import { readdir, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { createCatalog } from '../../src/services/catalogService.js';
@@ -130,6 +130,104 @@ describe('videoConvertService — lots', () => {
       assert.equal((await app.videos.listCandidates()).available, false);
       await assert.rejects(app.videos.startBatch(app.request), { code: 'FFMPEG_NOT_AVAILABLE' });
       assert.equal(app.videos.getBatch(), null);
+    } finally {
+      await app.library.cleanup();
+    }
+  });
+});
+
+describe('vidéo partagée par plusieurs .txt du même dossier (solo + duo)', () => {
+  /** @param {Record<string, string | Buffer>} files */
+  async function setupShared(files) {
+    const library = await createSongLibrary(files);
+    const songDir = path.join(library.root, 'lib');
+    const backupDir = path.join(library.root, 'backups');
+    const catalog = createCatalog({ songDir, logger: silentLogger });
+    await catalog.load();
+    const editor = createSongEditor({ catalog, backupDir, logger: silentLogger });
+    const ffmpeg = createFakeFfmpeg();
+    const videos = createVideoConverter({
+      catalog,
+      editor,
+      ffmpeg,
+      backupDir,
+      logger: silentLogger,
+    });
+    /** @param {string} name */
+    const read = (name) => readFile(path.join(songDir, 'duo', name), 'utf8');
+    const missing = () =>
+      catalog.getSongs().filter((s) => s.warnings.some((w) => w.code === 'MISSING_FILE'));
+    return { library, catalog, videos, ffmpeg, read, missing, songDir };
+  }
+
+  it('conversion du solo : le .txt duo pointe aussi vers le MP4, aucun fichier introuvable', async () => {
+    const app = await setupShared({
+      'lib/duo/solo.txt': txt('Solo', 'v.avi'),
+      'lib/duo/duo.txt': txt('Duo', 'v.avi'),
+      'lib/duo/v.avi': 'AVI',
+      'lib/duo/a.mp3': 'MP3',
+    });
+    try {
+      const solo = app.catalog.getSongs().find((s) => s.title === 'Solo');
+      assert.ok(solo);
+      await app.videos.start(solo.id, { expectedModifiedAt: solo.modifiedAt });
+      await waitFor(() => app.videos.getJob(solo.id)?.state !== 'running');
+      assert.equal(app.videos.getJob(solo.id)?.state, 'done');
+      assert.match(await app.read('solo.txt'), /#VIDEO:v\.mp4\n/);
+      assert.match(await app.read('duo.txt'), /#VIDEO:v\.mp4\n/);
+      assert.deepEqual((await readdir(path.join(app.songDir, 'duo'))).sort(), [
+        'a.mp3',
+        'duo.txt',
+        'solo.txt',
+        'v.mp4',
+      ]);
+      assert.deepEqual(app.missing(), []);
+    } finally {
+      await app.library.cleanup();
+    }
+  });
+
+  it('l’autre .txt utilise la vidéo comme musique : l’original est gardé', async () => {
+    const app = await setupShared({
+      'lib/duo/solo.txt': txt('Solo', 'v.avi'),
+      'lib/duo/duo.txt':
+        '#TITLE:Duo\n#ARTIST:A\n#MP3:v.avi\n#VIDEO:v.avi\n#BPM:300\n: 0 1 0 la\nE\n',
+      'lib/duo/v.avi': 'AVI',
+      'lib/duo/a.mp3': 'MP3',
+    });
+    try {
+      const solo = app.catalog.getSongs().find((s) => s.title === 'Solo');
+      assert.ok(solo);
+      await app.videos.start(solo.id, { expectedModifiedAt: solo.modifiedAt });
+      await waitFor(() => app.videos.getJob(solo.id)?.state !== 'running');
+      assert.match(await app.read('duo.txt'), /#MP3:v\.avi\n#VIDEO:v\.mp4\n/);
+      assert.ok((await readdir(path.join(app.songDir, 'duo'))).includes('v.avi'));
+      assert.deepEqual(app.missing(), []);
+    } finally {
+      await app.library.cleanup();
+    }
+  });
+
+  it('lot avec le solo et le duo : une seule conversion, les deux traités', async () => {
+    const app = await setupShared({
+      'lib/duo/solo.txt': txt('Solo', 'v.avi'),
+      'lib/duo/duo.txt': txt('Duo', 'v.avi'),
+      'lib/duo/v.avi': 'AVI',
+      'lib/duo/a.mp3': 'MP3',
+    });
+    try {
+      const { items } = await app.videos.listCandidates();
+      assert.equal(items.length, 2);
+      await app.videos.startBatch(
+        items.map((i) => ({ id: i.id, expectedModifiedAt: i.modifiedAt })),
+      );
+      await waitFor(() => app.videos.getBatch()?.state !== 'running');
+      assert.deepEqual(
+        app.videos.getBatch()?.items.map((i) => i.status),
+        ['converted', 'converted'],
+      );
+      assert.equal(app.ffmpeg.calls.filter((c) => c.endsWith('v.avi')).length, 1);
+      assert.deepEqual(app.missing(), []);
     } finally {
       await app.library.cleanup();
     }

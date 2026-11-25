@@ -9,6 +9,7 @@ import {
   normalizeHeaderValue,
   SongEditError,
 } from '../../src/services/songEditService.js';
+import { encodeWindows1252 } from '../../src/utils/windows1252.js';
 import { createSongLibrary } from '../helpers/songLibrary.js';
 
 const silentLogger = { info() {}, warn() {}, error() {} };
@@ -164,7 +165,7 @@ describe('songEditService', () => {
     const zen = songOf('Zen');
     await assert.rejects(
       editor.editHeaders(zen.id, {
-        values: { TITLE: 'Pirate' },
+        values: { BPM: '120' },
         expectedModifiedAt: zen.modifiedAt,
       }),
       (error) => error instanceof SongEditError && error.code === 'HEADER_NOT_EDITABLE',
@@ -308,6 +309,202 @@ describe('songEditService — langue, genre, année et chanteurs', () => {
       }
     } finally {
       await dir.cleanup();
+    }
+  });
+});
+
+describe('songEditService — caractères mal encodés', () => {
+  /** Texte UTF-8 relu en Windows-1252 : « é » → « Ã© ». */
+  const garble = (/** @type {string} */ text) =>
+    new TextDecoder('windows-1252').decode(Buffer.from(text, 'utf-8'));
+  const GARBLED = `#TITLE:Lune ${garble('à')} Maubeuge\r\n#ARTIST:Bourvil\r\n#MP3:lune.mp3\r\n#BPM:300\r\n: 0 4 0 ${garble('l’été')}\r\nE\r\n`;
+  /** @type {Awaited<ReturnType<typeof createSongLibrary>>} */
+  let dir;
+  /** @type {import('../../src/services/catalogService.js').Catalog} */
+  let catalog;
+  /** @type {import('../../src/services/songEditService.js').SongEditor} */
+  let editor;
+
+  beforeEach(async () => {
+    await dir?.cleanup();
+    dir = await createSongLibrary({
+      'lib/Lune/lune.txt': GARBLED,
+      'lib/Lune/lune.mp3': '',
+      // Windows-1252 (« là » sur un octet) avec un titre mal encodé
+      'lib/Cp/cp.txt': encodeWindows1252(
+        `#TITLE:${garble('été')}\r\n#ARTIST:X\r\n#MP3:cp.mp3\r\n#BPM:300\r\n: 0 4 0 là\r\nE\r\n`,
+      ),
+      'lib/Cp/cp.mp3': '',
+    });
+    catalog = createCatalog({ songDir: path.join(dir.root, 'lib'), logger: silentLogger });
+    await catalog.load();
+    editor = createSongEditor({
+      catalog,
+      backupDir: path.join(dir.root, 'backups'),
+      logger: silentLogger,
+    });
+  });
+  after(() => dir.cleanup());
+
+  /** @param {string} folder */
+  const songIn = (folder) => {
+    const song = catalog.getSongs().find((s) => s.folder === folder);
+    assert.ok(song);
+    return song;
+  };
+
+  it('simulation : liste les lignes, rien n’est écrit', async () => {
+    const song = songIn('Lune');
+    assert.ok(song.warnings.some((w) => w.code === 'ENCODING_MOJIBAKE'));
+    const dry = await editor.repairText(song.id, {
+      expectedModifiedAt: song.modifiedAt,
+      dryRun: true,
+    });
+    assert.deepEqual(
+      dry.changes.map((c) => [c.line, c.after]),
+      [
+        [1, '#TITLE:Lune à Maubeuge'],
+        [5, ': 0 4 0 l’été'],
+      ],
+    );
+    assert.equal(dry.backup, null);
+    assert.equal(await readFile(path.join(dir.root, 'lib/Lune/lune.txt'), 'utf8'), GARBLED);
+  });
+
+  it('répare : CRLF conservés, sauvegarde, avertissement disparu, titre corrigé', async () => {
+    const song = songIn('Lune');
+    const result = await editor.repairText(song.id, { expectedModifiedAt: song.modifiedAt });
+    assert.equal(
+      await readFile(path.join(dir.root, 'lib/Lune/lune.txt'), 'utf8'),
+      '#TITLE:Lune à Maubeuge\r\n#ARTIST:Bourvil\r\n#MP3:lune.mp3\r\n#BPM:300\r\n: 0 4 0 l’été\r\nE\r\n',
+    );
+    assert.equal(result.song.title, 'Lune à Maubeuge');
+    assert.ok(!result.song.warnings.some((w) => w.code === 'ENCODING_MOJIBAKE'));
+    assert.equal(
+      await readFile(path.join(dir.root, 'backups', String(result.backup)), 'utf8'),
+      GARBLED,
+    );
+  });
+
+  it('fichier Windows-1252 : reste en Windows-1252', async () => {
+    const song = songIn('Cp');
+    const result = await editor.repairText(song.id, { expectedModifiedAt: song.modifiedAt });
+    assert.equal(result.song.encoding, 'windows-1252');
+    assert.equal(result.song.title, 'été');
+    assert.deepEqual(
+      await readFile(path.join(dir.root, 'lib/Cp/cp.txt')),
+      encodeWindows1252(
+        '#TITLE:été\r\n#ARTIST:X\r\n#MP3:cp.mp3\r\n#BPM:300\r\n: 0 4 0 là\r\nE\r\n',
+      ),
+    );
+  });
+
+  it('refuse si le fichier a changé depuis son affichage', async () => {
+    const song = songIn('Lune');
+    await assert.rejects(
+      editor.repairText(song.id, { expectedModifiedAt: 1 }),
+      (error) => error instanceof SongEditError && error.code === 'SONG_CHANGED',
+    );
+  });
+});
+
+describe('songEditService — artiste et titre', () => {
+  const solo =
+    '#TITLE:Le prix des allumettes\r\n#ARTIST:Stone et Charden\r\n#MP3:a.mp3\r\n#BPM:300\r\n: 0 4 0 la\r\nE\r\n';
+  const duet =
+    '#TITLE:Le prix des allumettes [DUET]\n#ARTIST:Stone et Charden\n#MP3:a.mp3\n#BPM:300\nP1\n: 0 4 0 la\nE\n';
+  const other = '#TITLE:Autre\n#ARTIST:Stone et Charden\n#MP3:a.mp3\n#BPM:300\n: 0 4 0 la\nE\n';
+
+  async function setup() {
+    const dir = await createSongLibrary({
+      'lib/sc/solo.txt': solo,
+      'lib/sc/duo.txt': duet,
+      'lib/sc/autre.txt': other,
+      'lib/sc/a.mp3': '',
+    });
+    const catalog = createCatalog({ songDir: path.join(dir.root, 'lib'), logger: silentLogger });
+    await catalog.load();
+    /** @type {any[]} */
+    const calls = [];
+    const playlists = {
+      /** @param {any} renames */
+      async renameSongEntries(renames) {
+        calls.push(renames);
+        return { updated: [{ file: 'top.upl', backup: 'x' }], failed: [] };
+      },
+    };
+    const editor = createSongEditor({
+      catalog,
+      backupDir: path.join(dir.root, 'backups'),
+      playlists,
+      logger: silentLogger,
+    });
+    /** @param {string} name */
+    const read = (name) => readFile(path.join(dir.root, 'lib/sc', name), 'utf8');
+    /** @param {string} txtFile */
+    const songOf = (txtFile) => {
+      const song = catalog.getSongs().find((s) => s.txtFile === txtFile);
+      assert.ok(song);
+      return song;
+    };
+    return { dir, editor, calls, read, songOf };
+  }
+
+  it('titre et artiste : solo modifié, duo suivi (marque gardée), autre chanson intacte, playlists', async () => {
+    const app = await setup();
+    try {
+      const song = app.songOf('solo.txt');
+      const result = await app.editor.editHeaders(song.id, {
+        values: { ARTIST: 'Stone & Charden', TITLE: 'Le Prix des allumettes' },
+        expectedModifiedAt: song.modifiedAt,
+      });
+      assert.equal(result.song.artist, 'Stone & Charden');
+      assert.equal(
+        await app.read('solo.txt'),
+        '#TITLE:Le Prix des allumettes\r\n#ARTIST:Stone & Charden\r\n#MP3:a.mp3\r\n#BPM:300\r\n: 0 4 0 la\r\nE\r\n',
+      );
+      assert.match(
+        await app.read('duo.txt'),
+        /^#TITLE:Le Prix des allumettes \[DUET\]\n#ARTIST:Stone & Charden\n/,
+      );
+      assert.equal(await app.read('autre.txt'), other);
+      assert.deepEqual(
+        result.related?.updated.map((u) => u.txtFile),
+        ['duo.txt'],
+      );
+      assert.deepEqual(result.playlists?.updated, [{ file: 'top.upl', backup: 'x' }]);
+      assert.deepEqual(app.calls[0], [
+        {
+          from: { artist: 'Stone et Charden', title: 'Le prix des allumettes' },
+          to: { artist: 'Stone & Charden', title: 'Le Prix des allumettes' },
+        },
+        {
+          from: { artist: 'Stone et Charden', title: 'Le prix des allumettes [DUET]' },
+          to: { artist: 'Stone & Charden', title: 'Le Prix des allumettes [DUET]' },
+        },
+      ]);
+    } finally {
+      await app.dir.cleanup();
+    }
+  });
+
+  it('autre en-tête : ni propagation ni playlists ; artiste vide refusé', async () => {
+    const app = await setup();
+    try {
+      const song = app.songOf('solo.txt');
+      const result = await app.editor.editHeaders(song.id, {
+        values: { YEAR: '1972' },
+        expectedModifiedAt: song.modifiedAt,
+      });
+      assert.equal(result.related, undefined);
+      assert.deepEqual(app.calls, []);
+      assert.equal(await app.read('duo.txt'), duet);
+      await assert.rejects(
+        app.editor.editHeaders(song.id, { values: { ARTIST: '  ' }, expectedModifiedAt: 0 }),
+        (error) => error instanceof SongEditError && error.code === 'VALUE_REQUIRED',
+      );
+    } finally {
+      await app.dir.cleanup();
     }
   });
 });

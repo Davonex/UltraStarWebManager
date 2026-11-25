@@ -19,6 +19,7 @@ const ICON_BY_CODE = Object.freeze({
   MISSING_END: 'skip-end',
   ENCODING_NOT_UTF8: 'translate',
   ENCODING_UTF8_BOM: 'translate',
+  ENCODING_MOJIBAKE: 'fonts',
   MISSING_FILE: 'file-earmark-x',
   VIDEO_NOT_H264: 'film',
   VIDEO_TOO_LARGE: 'badge-4k',

@@ -1,10 +1,12 @@
 // @ts-check
 /**
  * Recherche d'informations sur MusicBrainz pour une chanson (niveau écriture : sert à
- * corriger #YEAR, #GENRE et #LANGUAGE ; l'enregistrement passe par PATCH /headers).
+ * corriger #ARTIST, #TITLE, #YEAR, #GENRE et #LANGUAGE ; l'enregistrement passe par
+ * PATCH /headers).
  * @module controllers/musicBrainzController
  */
 import { MBID_PATTERN } from '../parsers/musicBrainz.js';
+import { duetMarkOf } from '../parsers/naming.js';
 import { MusicBrainzError } from '../services/musicBrainzService.js';
 
 const SONG_NOT_FOUND = Object.freeze({ code: 'SONG_NOT_FOUND', message: 'Song not found' });
@@ -59,7 +61,8 @@ export function createMusicBrainzController(catalog, musicBrainz) {
      * @param {import('express').Response} res
      */
     async suggest(req, res) {
-      if (!catalog.getSong(req.params.id)) {
+      const song = catalog.getSong(req.params.id);
+      if (!song) {
         res.status(404).json({ error: SONG_NOT_FOUND });
         return;
       }
@@ -79,6 +82,9 @@ export function createMusicBrainzController(catalog, musicBrainz) {
           artistId: /** @type {string | null} */ (ids[1]),
           releaseGroupId: /** @type {string | null} */ (ids[2]),
         });
+        // Duo : le titre proposé garde la marque de duo de la chanson (« … [DUET] »).
+        const mark = duetMarkOf(song.title ?? '');
+        if (suggestion.title && mark) suggestion.title = `${suggestion.title}${mark}`;
         res.json({ data: { suggestion } });
       } catch (error) {
         sendError(res, error);

@@ -4,7 +4,9 @@ import { describe, it } from 'node:test';
 import {
   checkNaming,
   DEFAULT_NAMING,
+  duetMarkOf,
   expectedName,
+  isRedundantBackground,
   matchesPattern,
   namingKey,
   patternError,
@@ -90,6 +92,35 @@ describe('checkNaming', () => {
   it('fichiers absents, chanson à la racine ou sans artiste : non vérifiés', () => {
     assert.deepEqual(kinds(checkNaming(song({ folderName: '', files: {} }))), []);
     assert.deepEqual(checkNaming(song({ artist: null, txtFile: 'x.txt' })), []);
+  });
+
+  it('fond = pochette : nommée comme pochette ; sans autre image, entrée à retirer', () => {
+    const cover = `${BASE} [CO].jpg`;
+    const shared = { audio: `${BASE}.mp3`, cover, background: cover };
+    // Seule image du dossier : #BACKGROUND inutile
+    const alone = checkNaming(song({ files: shared, fileNames: [`${BASE}.txt`, cover] }));
+    assert.deepEqual(alone, [{ kind: 'BACKGROUND_IS_COVER', actual: cover, expected: '' }]);
+    // Une autre image existe : rien n'est signalé (pas de « [BG] attendu » sur la pochette)
+    const other = checkNaming(song({ files: shared, fileNames: [cover, 'fond.png'] }));
+    assert.deepEqual(other, []);
+    // Règle du fond désactivée : rien
+    const rules = { ...DEFAULT_NAMING, background: { enabled: false, pattern: '{artist} [BG]' } };
+    assert.deepEqual(checkNaming(song({ files: shared, fileNames: [cover] }), rules), []);
+  });
+
+  it('duetMarkOf : marque de duo en fin de titre, espaces compris', () => {
+    assert.equal(duetMarkOf('Tonight [DUET]'), ' [DUET]');
+    assert.equal(duetMarkOf('Mourir demain (duo)'), ' (duo)');
+    assert.equal(duetMarkOf('Le prix - DUO'), ' - DUO');
+    assert.equal(duetMarkOf('Zen'), '');
+  });
+
+  it('isRedundantBackground : même fichier (casse ignorée) et aucune autre image', () => {
+    assert.equal(isRedundantBackground('a.jpg', 'A.JPG', ['a.jpg', 'a.mp3', 'a.txt']), true);
+    assert.equal(isRedundantBackground('a.jpg', 'a.jpg', ['a.jpg', 'b.PNG']), false);
+    assert.equal(isRedundantBackground('a.jpg', 'a.jpg', ['a.jpg', '.thumb.jpg']), true);
+    assert.equal(isRedundantBackground('a.jpg', 'b.jpg', ['a.jpg', 'b.jpg']), false);
+    assert.equal(isRedundantBackground('a.jpg', null, ['a.jpg']), false);
   });
 
   it('vidéo qui sert aussi de musique : vérifiée une seule fois (comme audio)', () => {
