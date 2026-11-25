@@ -50,7 +50,7 @@ export function createApiRouter({
   const router = Router();
   const songs = createSongsController(catalog, editor, videos);
   const video = createVideoController(catalog, videos);
-  const bulk = createBulkController(catalog, editor, videos);
+  const bulk = createBulkController(catalog, editor, videos, replayGain);
   const images = createFacetImagesController(facetImages);
   const playlistsCtl = createPlaylistsController(catalog, playlists);
   const mb = createMusicBrainzController(catalog, musicBrainz);
@@ -104,6 +104,9 @@ export function createApiRouter({
   router.post('/bulk/extract-audio', write, bulk.extractAudio);
   router.get('/bulk/extract-audio', write, bulk.getAudioBatch);
   router.post('/bulk/extract-audio/stop', write, bulk.stopAudioBatch);
+  router.post('/bulk/replaygain', write, bulk.replayGain);
+  router.get('/bulk/replaygain', write, bulk.getReplayGainBatch);
+  router.post('/bulk/replaygain/stop', write, bulk.stopReplayGainBatch);
 
   // Administration : préférences communes à tous (modèles de nommage…)
   router.put('/settings', requireRole('admin'), preferences.update);

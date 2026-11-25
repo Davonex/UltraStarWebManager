@@ -25,8 +25,9 @@ const txt = (video) =>
 /**
  * @param {Record<string, string | Buffer>} files
  * @param {Parameters<typeof createFakeFfmpeg>[0]} [fakeOptions]
+ * @param {boolean} [backupOriginal]  Préférence « sauvegarder la vidéo d'origine ».
  */
-async function setup(files, fakeOptions) {
+async function setup(files, fakeOptions, backupOriginal = true) {
   const library = await createSongLibrary(files);
   const songDir = path.join(library.root, 'lib');
   const backupDir = path.join(library.root, 'backups');
@@ -34,7 +35,14 @@ async function setup(files, fakeOptions) {
   await catalog.load();
   const editor = createSongEditor({ catalog, backupDir, logger: silentLogger });
   const ffmpeg = createFakeFfmpeg(fakeOptions);
-  const videos = createVideoConverter({ catalog, editor, ffmpeg, backupDir, logger: silentLogger });
+  const videos = createVideoConverter({
+    catalog,
+    editor,
+    ffmpeg,
+    backupDir,
+    backupOriginal: () => backupOriginal,
+    logger: silentLogger,
+  });
   const song = catalog.getSongs()[0];
   /** @param {string} name */
   const songFile = (name) => path.join(songDir, 'clip', name);
@@ -54,7 +62,12 @@ describe('videoConvertService', () => {
       const { plan, job } = await app.videos.start(app.song.id, {
         expectedModifiedAt: app.song.modifiedAt,
       });
-      assert.deepEqual(plan, { from: 'clip.avi', to: 'clip.mp4', replaces: false });
+      assert.deepEqual(plan, {
+        from: 'clip.avi',
+        to: 'clip.mp4',
+        replaces: false,
+        keepOriginal: true,
+      });
       assert.equal(job?.state, 'running');
 
       const done = await app.finished();
@@ -291,6 +304,36 @@ describe('videoConvertService — vidéo plus grande que 1080p', () => {
       assert.equal(plan.replaces, true);
       assert.equal((await app.finished())?.state, 'done');
       assert.deepEqual(await readFile(app.songFile('clip.mp4')), H264_720P());
+    } finally {
+      await app.library.cleanup();
+    }
+  });
+});
+
+describe('videoConvertService — sauvegarde de l’original désactivée (préférences)', () => {
+  it('AVI → MP4 : l’original est supprimé sans copie dans les sauvegardes', async () => {
+    const app = await setup(
+      { 'lib/clip/a.txt': txt('clip.avi'), 'lib/clip/clip.avi': AVI },
+      undefined,
+      false,
+    );
+    try {
+      const { plan } = await app.videos.start(app.song.id, {
+        expectedModifiedAt: app.song.modifiedAt,
+      });
+      assert.equal(plan.keepOriginal, false);
+      const done = await app.finished();
+      assert.equal(done?.state, 'done');
+      assert.equal(done?.backup, null);
+      assert.deepEqual((await readdir(path.join(app.library.root, 'lib/clip'))).sort(), [
+        'a.txt',
+        'clip.mp4',
+      ]);
+      // Seule la sauvegarde du .txt existe (toujours faite)
+      assert.deepEqual(
+        (await readdir(path.join(app.backupDir, 'clip'))).map((f) => path.extname(f)),
+        ['.txt'],
+      );
     } finally {
       await app.library.cleanup();
     }

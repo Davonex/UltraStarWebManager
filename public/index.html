@@ -27,20 +27,36 @@
         </span>
         <span id="server-status" class="badge text-bg-secondary">Connecting…</span>
         <span id="role-badge" class="badge text-bg-secondary" hidden></span>
-        <button
-          id="preferences-button"
-          type="button"
-          class="btn btn-sm btn-outline-secondary"
-          title="Preferences"
-          aria-label="Preferences"
-          data-i18n-title="preferences.title"
-          data-i18n-aria-label="preferences.title"
-          data-bs-toggle="modal"
-          data-bs-target="#preferences-modal"
-          hidden
-        >
-          <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#gear" /></svg>
-        </button>
+        <!-- Préférences (admin) : menu, chaque entrée ouvre sa fenêtre (public/js/preferencesView.js) -->
+        <div id="preferences-menu" class="dropdown" hidden>
+          <button
+            id="preferences-button"
+            type="button"
+            class="btn btn-sm btn-outline-secondary"
+            title="Preferences"
+            aria-label="Preferences"
+            aria-expanded="false"
+            data-i18n-title="preferences.title"
+            data-i18n-aria-label="preferences.title"
+            data-bs-toggle="dropdown"
+          >
+            <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#gear" /></svg>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+              <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-preferences-section="naming">
+                <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#input-cursor-text" /></svg>
+                <span data-i18n="preferences.namingMenu">Naming rules</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-preferences-section="backups">
+                <svg class="bi" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#archive" /></svg>
+                <span data-i18n="preferences.backupsMenu">Backups</span>
+              </button>
+            </li>
+          </ul>
+        </div>
         <button
           id="bulk-button"
           type="button"
@@ -401,6 +417,19 @@
                 <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#link-45deg" /></svg>
                 <span data-i18n="bulk.audio.tab">Music in the video</span>
               </button>
+              <button
+                id="bulk-tab-replaygain"
+                class="nav-link"
+                type="button"
+                role="tab"
+                data-bs-toggle="tab"
+                data-bs-target="#bulk-pane-replaygain"
+                aria-controls="bulk-pane-replaygain"
+                aria-selected="false"
+              >
+                <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#soundwave" /></svg>
+                <span data-i18n="bulk.replayGain.tab">ReplayGain</span>
+              </button>
             </div>
             <div class="tab-content">
               <div id="bulk-pane-utf8" class="tab-pane fade show active" role="tabpanel" aria-labelledby="bulk-tab-utf8">
@@ -497,6 +526,66 @@
                             <th scope="col" data-i18n="bulk.song">Song</th>
                             <th scope="col" data-i18n="details.videoFormat">Video format</th>
                             <th scope="col" data-i18n="details.resolution">Resolution</th>
+                            <th scope="col" class="text-end" data-i18n="bulk.size">Size</th>
+                          </tr>
+                        </thead>
+                        <tbody data-part="rows"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </section>
+              </div>
+              <div id="bulk-pane-replaygain" class="tab-pane fade" role="tabpanel" aria-labelledby="bulk-tab-replaygain">
+                <section class="bulk-tool" data-bulk-tool="replaygain" aria-labelledby="bulk-replaygain-title">
+                  <h3 id="bulk-replaygain-title" class="h6" data-i18n="bulk.replayGain.title">Add ReplayGain to MP3 files</h3>
+                  <p class="small text-body-secondary" data-i18n="bulk.replayGain.hint">
+                    Measures the loudness of each MP3 without ReplayGain and writes it to its ID3 tag.
+                  </p>
+                  <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-part="simulate">
+                      <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#arrow-repeat" /></svg>
+                      <span data-i18n="bulk.simulate">Simulate</span>
+                    </button>
+                    <p class="small mb-0" data-part="status" aria-live="polite"></p>
+                  </div>
+                  <p class="small text-body-secondary mb-2" data-part="note" hidden></p>
+                  <div class="bulk-running mb-2" data-part="running" hidden>
+                    <progress class="bulk-progress w-100 mb-1" data-part="progress"></progress>
+                    <p class="small mb-1" data-part="current" aria-live="polite"></p>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-part="stop">
+                      <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#x-lg" /></svg>
+                      <span data-i18n="bulk.replayGain.stop">Stop after the current file</span>
+                    </button>
+                  </div>
+                  <p class="small mb-2" data-part="summary" role="status" hidden></p>
+                  <ul class="small text-danger mb-2" data-part="errors" hidden></ul>
+                  <div data-part="list" hidden>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                      <label class="small" for="bulk-replaygain-batch" data-i18n="bulk.video.batchSize">Batch size</label>
+                      <select id="bulk-replaygain-batch" class="form-select form-select-sm w-auto" data-part="batch-size">
+                        <option value="10">10</option>
+                        <option value="20" selected>20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="0" data-i18n="bulk.replayGain.max">200 (maximum)</option>
+                      </select>
+                      <button type="button" class="btn btn-sm btn-primary" data-part="apply">Compute</button>
+                    </div>
+                    <div class="table-responsive bulk-table">
+                      <table class="table table-sm align-middle mb-2">
+                        <thead>
+                          <tr>
+                            <th scope="col">
+                              <input
+                                type="checkbox"
+                                class="form-check-input"
+                                data-part="select-all"
+                                aria-label="Select all"
+                                data-i18n-aria-label="bulk.selectAll"
+                              />
+                            </th>
+                            <th scope="col" data-i18n="bulk.song">Song</th>
+                            <th scope="col" data-i18n="bulk.file">File</th>
                             <th scope="col" class="text-end" data-i18n="bulk.size">Size</th>
                           </tr>
                         </thead>
@@ -619,8 +708,8 @@
         <div class="modal-content">
           <div class="modal-header">
             <h2 id="preferences-modal-title" class="modal-title h5">
-              <svg class="bi me-1" aria-hidden="true"><use href="/img/vendor/bootstrap-icons/icons.svg#gear" /></svg>
-              <span data-i18n="preferences.title">Preferences</span>
+              <svg class="bi me-1" aria-hidden="true"><use data-part="title-icon" href="/img/vendor/bootstrap-icons/icons.svg#gear" /></svg>
+              <span data-part="title">Preferences</span>
             </h2>
             <button
               type="button"
@@ -631,12 +720,21 @@
             ></button>
           </div>
           <div class="modal-body">
-            <h3 class="h6" data-i18n="preferences.namingTitle">File naming</h3>
+            <section data-section="naming">
+            <h3 class="visually-hidden" data-i18n="preferences.namingTitle">File naming</h3>
             <p class="small text-body-secondary" data-i18n="preferences.namingIntro">
               Expected name of each item. Use {artist} and {title} (from #ARTIST and #TITLE); the extension is not
               checked. Untick an item to stop checking it.
             </p>
             <div data-part="naming"></div>
+            </section>
+            <section data-section="backups">
+            <h3 class="visually-hidden" data-i18n="preferences.backupsTitle">Backups</h3>
+            <p class="small text-body-secondary" data-i18n="preferences.backupsIntro">
+              Copy of the original to the backup folder before each write.
+            </p>
+            <div data-part="backups"></div>
+            </section>
           </div>
           <div class="modal-footer justify-content-between">
             <div data-part="status" class="me-auto" aria-live="polite"></div>

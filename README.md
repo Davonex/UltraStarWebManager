@@ -31,7 +31,8 @@ no build step).
   and genre** of a song on
   [MusicBrainz](https://musicbrainz.org/) and keep the values you choose.
 - **Editing** (write access): double-click a song's **Artist, Title, Language, Genre, Year,
-  Edition, Tags, Creator** or, for duets, **singer names (P1 / P2)** in the details window to edit it in place,
+  Edition, Tags, Creator**, its **timing** (BPM, GAP, VIDEOGAP, preview start, medley start and
+  end, START, END) or, for duets, **singer names (P1 / P2)** in the details window to edit it in place,
   picking existing values or creating new ones; dated backup, original encoding kept.
 - **Bulk corrections** (write access, toolbox button in the top bar): simulate first, pick the
   files, then apply with a progress bar. Tools: convert every file to UTF-8 without BOM; convert
@@ -166,6 +167,11 @@ Enter in an empty input; **cancel** with ✕ or Esc. Saving:
    exist in a Windows-1252 file (emoji, Asian scripts…) is refused rather than corrupted;
 4. updates the grid and filters immediately.
 
+**Timing** — BPM, GAP (ms), VIDEOGAP (s, may be negative), preview start (s), medley start and
+end (beats, end after start), START (s) and END (ms) are edited as raw numbers, with a point or a
+comma; the file keeps its own decimal separator. An empty value removes the header (BPM is
+required). Changing BPM or GAP shifts every note: only use it for a known correction.
+
 **Artist and title** cannot be empty. A change also goes to the other `.txt` files of the folder
 that are the same song (solo, duet…; the duet mark such as `[DUET]` stays on the duet title) and
 to every playlist line `Artist : Title` of the song, each file with its dated backup. Scores
@@ -256,6 +262,11 @@ Tools (one tab each):
   half-converted file. At the end, a summary is shown and the list is simulated again, so the
   next batch is ready. Each video goes through the same safe steps as the conversion from the
   details window. Rough timing with a recent PC: 15–30 s for an SD clip, 1–2 min in 1080p.
+- **ReplayGain** — lists the MP3 files without ReplayGain (one row per file: a solo and a duet
+  sharing the MP3 are computed once), with their size, since each MP3 is copied to the backups
+  before its ID3 tag is written. Choose the batch size (up to 200); files are measured and
+  tagged one after the other in the background, with **Stop after the current file**. An MP3
+  changed since the simulation is skipped.
 - **Music in the video** — lists the songs whose `#MP3` is the video file and creates their MP3
   (same steps as **Create the MP3** in the details window), one after the other in the
   background, with **Stop after the current song**. When a solo and a duet `.txt` share the same
@@ -314,14 +325,21 @@ is written to `BACKUP_DIR/renames/`, and **Undo this rename** restores the names
 contents, provided nothing changed in the meantime. Playlists (`.upl`, "Artist : Title") and
 UltraStar Deluxe scores (artist and title) are not affected.
 
-**Preferences** (admin) — The gear button in the top bar opens the preferences. The **File
-naming** section lists each item checked by the naming warnings: folder, song `.txt`, duet `.txt`,
+**Preferences** (admin) — The gear button in the top bar opens a menu with two entries, each
+opening its own window: **Naming rules** and **Backups**. **Naming rules** lists each item checked by the naming warnings: folder, song `.txt`, duet `.txt`,
 audio, video, cover, background, vocals and instrumental. For each one: a box to turn the check on
 or off, the pattern of the expected name (`{artist}` and `{title}` come from `#ARTIST` and
 `#TITLE`; the extension is not checked) and an example of the result. **Default values** restores
 `{artist} - {title}` with the `[DUET]`, `[CO]`, `[BG]`, `[VOC]` and `[INSTR]` suffixes. **Save**
 writes `settings.json` (see `SETTINGS_FILE`), then re-reads the library so the warnings follow the
 new patterns at once. Characters forbidden in Windows file names are refused.
+
+**Backups** lists what is copied to `BACKUP_DIR` before a write. Song `.txt` files and
+playlists are **always** backed up (not adjustable). Two large-file backups can be turned off:
+the **original video** of an MP4 H.264 conversion (it is then deleted once the new video is in
+place) and the **MP3 before its ReplayGain tag is written** (only the ID3 tag changes; the audio
+data is copied unchanged). Both are on by default; the details window and the bulk tools say
+when a backup is off.
 
 ## API
 
@@ -365,6 +383,9 @@ All responses are JSON: `{ data: … }` on success, `{ error: { code, message } 
 | POST   | `/api/bulk/extract-audio`                 | write  | `{ dryRun: true }` → `{ data: { available, items } }`; `{ items: [{ id, expectedModifiedAt }] }` (≤ 200) → `202 { data: { batch } }`                           |
 | GET    | `/api/bulk/extract-audio`                 | write  | Current or last MP3 batch: `{ data: { batch } }`                                                                                                               |
 | POST   | `/api/bulk/extract-audio/stop`            | write  | Stop the MP3 batch after the current song                                                                                                                      |
+| POST   | `/api/bulk/replaygain`                    | write  | `{ dryRun: true }` → `{ data: { available, items } }`; `{ items: [{ id, expectedAudioModifiedAt }] }` (≤ 200) → `202 { data: { batch } }`                      |
+| GET    | `/api/bulk/replaygain`                    | write  | Current or last ReplayGain batch: `{ data: { batch } }`                                                                                                        |
+| POST   | `/api/bulk/replaygain/stop`               | write  | Stop the ReplayGain batch after the current file                                                                                                               |
 | POST   | `/api/bulk/convert-utf8`                  | write  | `{ dryRun: true }` → `{ data: { items } }`; `{ items: [{ id, expectedModifiedAt }] }` (≤ 200) → `{ data: { results } }`                                        |
 
 The `Song` and `SongDetails` formats are described by their `@typedef` in

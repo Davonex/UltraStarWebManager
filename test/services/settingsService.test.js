@@ -54,3 +54,22 @@ describe('settingsService', () => {
     });
   });
 });
+
+describe('settingsService — sauvegardes facultatives', () => {
+  it('par défaut tout est sauvegardé ; ancien fichier sans « backups » : valeurs par défaut', () => {
+    assert.deepEqual(validateSettings({ naming: {} }).backups, {
+      videoConversion: true,
+      replayGain: true,
+    });
+  });
+
+  it('valeurs reçues gardées ; type invalide refusé', () => {
+    assert.deepEqual(validateSettings({ naming: {}, backups: { replayGain: false } }).backups, {
+      videoConversion: true,
+      replayGain: false,
+    });
+    for (const backups of [null, 'non', { videoConversion: 'false' }]) {
+      assert.throws(() => validateSettings({ naming: {}, backups }), { code: 'INVALID_REQUEST' });
+    }
+  });
+});

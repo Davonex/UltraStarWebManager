@@ -41,6 +41,7 @@ const MTIME_TOLERANCE_MS = 1;
  * @property {string} from      Nom du fichier d'origine.
  * @property {string} to        Nom du fichier produit.
  * @property {boolean} replaces  Le fichier produit remplace l'original (même nom).
+ * @property {boolean} keepOriginal  L'original est sauvegardé (préférence).
  * @property {number} startedAt
  * @property {number | null} finishedAt
  * @property {string | null} code     Code d'erreur (état « error »).
@@ -136,9 +137,18 @@ const exists = (file) =>
  * @param {import('./songEditService.js').SongEditor} options.editor
  * @param {import('./ffmpegService.js').Ffmpeg} options.ffmpeg
  * @param {string} options.backupDir
+ * @param {() => boolean} [options.backupOriginal]  Préférence : copier la vidéo d'origine dans
+ *   BACKUP_DIR avant de la remplacer ou de la supprimer (oui par défaut).
  * @param {Pick<Console, 'info' | 'warn'>} [options.logger]
  */
-export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logger = console }) {
+export function createVideoConverter({
+  catalog,
+  editor,
+  ffmpeg,
+  backupDir,
+  backupOriginal = () => true,
+  logger = console,
+}) {
   /** @type {Map<string, VideoJob>} */
   const jobs = new Map();
   /** Une conversion (seule ou en lot) occupe déjà ffmpeg. */
@@ -253,11 +263,14 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
         throw new SongEditError('VIDEO_CONVERSION_FAILED', 'Converted file is not H.264', 500);
       }
 
-      job.backup = await backupFile({
-        file: plan.source,
-        relativePath: `${song.folder}/${plan.sourceName}`,
-        backupDir,
-      });
+      // Sauvegarde de l'original (désactivable dans les préférences : il est alors supprimé).
+      job.backup = backupOriginal()
+        ? await backupFile({
+            file: plan.source,
+            relativePath: `${song.folder}/${plan.sourceName}`,
+            backupDir,
+          })
+        : null;
 
       if (plan.replaces) {
         await replaceFile(temp, plan.source); // l'original peut être en cours de lecture
@@ -280,7 +293,7 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
       }
       await catalog.refreshSong(song.id);
       logger.info(
-        `Video converted ${song.folder}/${plan.sourceName} → ${plan.targetName} (backup: ${job.backup})`,
+        `Video converted ${song.folder}/${plan.sourceName} → ${plan.targetName} (backup: ${job.backup ?? 'disabled'})`,
       );
       Object.assign(job, { state: 'done', progress: 1 });
     } catch (error) {
@@ -313,7 +326,12 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
       });
     }
     await checkUnchanged(song, expectedModifiedAt);
-    const summary = { from: plan.sourceName, to: plan.targetName, replaces: plan.replaces };
+    const summary = {
+      from: plan.sourceName,
+      to: plan.targetName,
+      replaces: plan.replaces,
+      keepOriginal: backupOriginal(),
+    };
     return { song, plan, summary };
   }
 
@@ -326,7 +344,7 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
 
   /**
    * @param {string} id
-   * @param {{ from: string, to: string, replaces: boolean }} summary
+   * @param {{ from: string, to: string, replaces: boolean, keepOriginal: boolean }} summary
    * @returns {VideoJob}
    */
   function newJob(id, summary) {
@@ -591,7 +609,8 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
      *
      * @param {string} id
      * @param {{ expectedModifiedAt: number, dryRun?: boolean }} request
-     * @returns {Promise<{ plan: { from: string, to: string, replaces: boolean }, job: VideoJob | null }>}
+     * @returns {Promise<{ plan: { from: string, to: string, replaces: boolean, keepOriginal: boolean }, job: VideoJob | null }>}
+     *   `plan.keepOriginal` : l'original sera sauvegardé (préférence).
      * @throws {SongEditError}
      */
     async start(id, { expectedModifiedAt, dryRun = false }) {
@@ -610,7 +629,8 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
      * Vidéos à convertir (simulation des corrections en masse) : tout ce qui n'est pas en
      * MP4 H.264, avec la taille des fichiers (place nécessaire dans les sauvegardes).
      *
-     * @returns {Promise<{ available: boolean, items: VideoCandidate[] }>}
+     * @returns {Promise<{ available: boolean, backup: boolean, items: VideoCandidate[] }>}
+     *   `backup` : les originaux seront sauvegardés (préférence).
      */
     async listCandidates() {
       const songs = catalog
@@ -642,7 +662,7 @@ export function createVideoConverter({ catalog, editor, ffmpeg, backupDir, logge
           };
         }),
       );
-      return { available: await ffmpeg.isAvailable(), items };
+      return { available: await ffmpeg.isAvailable(), backup: backupOriginal(), items };
     },
 
     /**

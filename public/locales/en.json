@@ -104,7 +104,9 @@
     "RENAME_NOT_FOUND": "Rename not found.",
     "RENAME_ALREADY_UNDONE": "This rename was already undone.",
     "VALUE_REQUIRED": "This field cannot be empty.",
-    "PLAYLIST_WRITE_FAILED": "The playlist could not be updated."
+    "PLAYLIST_WRITE_FAILED": "The playlist could not be updated.",
+    "INVALID_NUMBER": "Invalid number for {header}.",
+    "MEDLEY_ORDER": "The medley must end after it starts."
   },
   "warnings": {
     "MISSING_HEADER": "Missing or invalid #{header} header",
@@ -148,7 +150,9 @@
     "hideVideo": "Hide video"
   },
   "common": {
-    "close": "Close"
+    "close": "Close",
+    "yes": "yes",
+    "no": "no"
   },
   "auth": {
     "title": "Sign in",
@@ -305,7 +309,8 @@
       "stopping": "Stopping after the current video…",
       "summary": "Batch finished: {converted} converted, {errors} error(s).",
       "stopped": "Batch stopped: {converted} converted, {errors} error(s), {skipped} not processed.",
-      "isAudio": "also the music (#MP3): create the MP3 from the details window first"
+      "isAudio": "also the music (#MP3): create the MP3 from the details window first",
+      "noBackup": "Backup of the originals disabled in the preferences: the original videos will be deleted after conversion."
     },
     "audio": {
       "tab": "Music in the video",
@@ -327,6 +332,32 @@
       "stopping": "Stopping after the current song…",
       "summary": "Batch done: {created} MP3 created, {errors} error(s).",
       "stopped": "Batch stopped: {created} MP3 created, {errors} error(s), {skipped} not processed."
+    },
+    "replayGain": {
+      "tab": "ReplayGain",
+      "title": "Add ReplayGain to MP3 files",
+      "hint": "Measures the loudness of each MP3 without ReplayGain and writes it to its ID3 tag (same as the button in the details window). The audio data does not change. Runs in the background, a few seconds per file: you can close this window.",
+      "none": "Every MP3 already has its ReplayGain.",
+      "found": {
+        "one": "{count} MP3 without ReplayGain.",
+        "other": "{count} MP3 files without ReplayGain."
+      },
+      "shared": {
+        "one": "MP3 shared with {count} other .txt (duet…)",
+        "other": "MP3 shared with {count} other .txt files"
+      },
+      "space": "Each MP3 is copied to the backups before writing: plan about {size} of disk space for the next batch.",
+      "max": "200 (maximum)",
+      "apply": {
+        "one": "Compute {count} file",
+        "other": "Compute the next {count} files"
+      },
+      "current": "File {index}/{total}: {song}",
+      "stop": "Stop after the current file",
+      "stopping": "Stopping after the current file…",
+      "summary": "Batch done: {written} ReplayGain written, {errors} error(s), {skipped} already done.",
+      "stopped": "Batch stopped: {written} ReplayGain written, {errors} error(s), {skipped} not processed or already done.",
+      "noBackup": "Backup of the MP3 files disabled in the preferences: only the ID3 tag is rewritten, no copy."
     }
   },
   "video": {
@@ -341,7 +372,10 @@
     "runningUnknown": "Converting…",
     "done": "Video converted: {file}. Original saved in the backups: {backup}",
     "unavailable": "ffmpeg not found: set FFMPEG_PATH in .env to enable conversion.",
-    "isAudio": "The video file is also the song’s music: create the MP3 file first (warning above), then the video can be converted."
+    "isAudio": "The video file is also the song’s music: create the MP3 file first (warning above), then the video can be converted.",
+    "planNewNoBackup": "{from} will be converted to {to}; #VIDEO will be updated and the original deleted (backup disabled in the preferences).",
+    "planReplaceNoBackup": "{from} will be replaced by its H.264 version; the original will not be backed up (disabled in the preferences).",
+    "doneNoBackup": "Video converted: {file}. Original not backed up (preferences)."
   },
   "musicbrainz": {
     "title": "MusicBrainz",
@@ -390,7 +424,8 @@
     "hint": "ffmpeg measures the song (89 dB reference, like MP3Gain); you confirm before anything is written. Only the ID3 tag changes, not the sound.",
     "measured": "Measured: track gain {gain}, peak {peak}.",
     "write": "Write to the MP3",
-    "written": "ReplayGain written to the MP3 (ID3 tag). Backup: {backup}"
+    "written": "ReplayGain written to the MP3 (ID3 tag). Backup: {backup}",
+    "writtenNoBackup": "ReplayGain written to the MP3 (ID3 tag). No backup of the MP3 (preferences)."
   },
   "warningTypes": {
     "MISSING_HEADER": "Header #{header} missing or invalid",
@@ -420,7 +455,7 @@
     "notChecked": "not checked",
     "defaults": "Default values",
     "save": "Save",
-    "saved": "Preferences saved: the library was re-read with the new patterns.",
+    "saved": "Preferences saved: the library was re-read (naming) and the backup settings are applied.",
     "invalid": "A pattern is invalid: see the field in red.",
     "kinds": {
       "folder": "Folder",
@@ -439,7 +474,24 @@
       "PATTERN_NO_PLACEHOLDER": "Use {artist} and/or {title}.",
       "PATTERN_UNKNOWN_PLACEHOLDER": "Only {artist} and {title} can be used.",
       "PATTERN_FORBIDDEN_CHARACTER": "Characters \\ / : * ? \" < > | are not allowed in file names."
-    }
+    },
+    "backupsTitle": "Backups",
+    "backupsIntro": "Copy of the original to the backup folder (BACKUP_DIR) before each write. Song files and playlists are always backed up; large files may be left out.",
+    "action": "Action",
+    "backup": "Backup",
+    "always": "always",
+    "backupKinds": {
+      "txt": "Song .txt files (headers, encoding, rename, MP3 created…)",
+      "playlists": "Playlists .upl",
+      "videoConversion": "Video conversion to MP4 H.264 (original video)",
+      "replayGain": "MP3 ReplayGain (MP3 before its tag is written)"
+    },
+    "backupHints": {
+      "videoConversion": "Off: the original video is deleted after conversion.",
+      "replayGain": "Off: only the ID3 tag changes, the audio data is copied unchanged."
+    },
+    "namingMenu": "Naming rules",
+    "backupsMenu": "Backups"
   },
   "rename": {
     "open": "Rename to the naming rules",
@@ -509,5 +561,37 @@
       "EXISTS": "A folder already has this name."
     },
     "short": "Rename"
+  },
+  "timing": {
+    "BPM": "BPM",
+    "GAP": "GAP (ms)",
+    "VIDEOGAP": "VIDEOGAP (s)",
+    "PREVIEWSTART": "Preview start (s)",
+    "MEDLEYSTARTBEAT": "Medley start (beat)",
+    "MEDLEYENDBEAT": "Medley end (beat)",
+    "START": "START (s)",
+    "END": "END (ms)",
+    "medleyStartShort": "Medley: start",
+    "medleyEndShort": "Medley: end"
+  },
+  "timingHint": {
+    "BPM": "e.g. 300",
+    "GAP": "ms, e.g. 12345",
+    "VIDEOGAP": "s, e.g. 3.2 or -0.5",
+    "PREVIEWSTART": "s, e.g. 45.5",
+    "MEDLEYSTARTBEAT": "beat, e.g. 395",
+    "MEDLEYENDBEAT": "beat, e.g. 1105",
+    "START": "s, e.g. 1.5",
+    "END": "ms, e.g. 180000"
+  },
+  "timingHelp": {
+    "BPM": "Careful: changing the BPM shifts every note. Only for a known correction (e.g. from Yass).",
+    "GAP": "Milliseconds before the first beat. Shifts every note against the music.",
+    "VIDEOGAP": "Seconds: video − music. Positive = the video starts further in; negative allowed. Empty = 0.",
+    "PREVIEWSTART": "Seconds from the start of the music. Empty = automatic (medley, otherwise the player's choice).",
+    "MEDLEYSTARTBEAT": "Beat where the medley excerpt starts (whole number). Empty = remove.",
+    "MEDLEYENDBEAT": "Beat where the medley ends (whole number), after its start. Empty = remove.",
+    "START": "Seconds: the music starts here. Empty = remove.",
+    "END": "Milliseconds: the song stops here. Empty = remove."
   }
 }

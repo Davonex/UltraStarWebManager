@@ -35,8 +35,9 @@ function isValidItems(items) {
  * @param {import('../services/catalogService.js').Catalog} catalog
  * @param {import('../services/songEditService.js').SongEditor} editor
  * @param {import('../services/videoConvertService.js').VideoConverter} videos
+ * @param {import('../services/replayGainService.js').ReplayGainTool} replayGain
  */
-export function createBulkController(catalog, editor, videos) {
+export function createBulkController(catalog, editor, videos, replayGain) {
   /**
    * Répond 503 si le catalogue n'est pas prêt.
    * @param {import('express').Response} res
@@ -161,6 +162,72 @@ export function createBulkController(catalog, editor, videos) {
      */
     stopAudioBatch(_req, res) {
       res.json({ data: { batch: videos.stopBatch('audio') } });
+    },
+
+    /**
+     * POST /api/bulk/replaygain — calcul et écriture du ReplayGain des MP3 qui n'en ont pas.
+     *
+     * - `{ dryRun: true }` → `{ data: { available, items: [{ id, artist, title, file, size,
+     *   audioModifiedAt, sharedBy }] } }`
+     * - `{ items: [{ id, expectedAudioModifiedAt }] }` (au plus 200) → `202 { data: { batch } }`.
+     *
+     * @param {import('express').Request} req
+     * @param {import('express').Response} res
+     */
+    async replayGain(req, res) {
+      if (!ensureReady(res)) return;
+      const { dryRun, items } = req.body ?? {};
+      if (dryRun === true) {
+        res.json({ data: await replayGain.listCandidates() });
+        return;
+      }
+      const valid =
+        Array.isArray(items) &&
+        items.length > 0 &&
+        items.length <= MAX_BULK_ITEMS &&
+        items.every(
+          (item) =>
+            item !== null &&
+            typeof item === 'object' &&
+            typeof item.id === 'string' &&
+            typeof item.expectedAudioModifiedAt === 'number',
+        );
+      if (!valid) {
+        res.status(400).json({
+          error: {
+            code: 'INVALID_REQUEST',
+            message: `Expected dryRun: true, or 1 to ${MAX_BULK_ITEMS} items { id, expectedAudioModifiedAt }`,
+          },
+        });
+        return;
+      }
+      try {
+        const batch = await replayGain.startBatch(
+          items.map(({ id, expectedAudioModifiedAt }) => ({ id, expectedAudioModifiedAt })),
+        );
+        res.status(202).json({ data: { batch } });
+      } catch (error) {
+        if (!(error instanceof SongEditError)) throw error;
+        res.status(error.status).json({ error: { code: error.code, message: error.message } });
+      }
+    },
+
+    /**
+     * GET /api/bulk/replaygain — lot en cours ou dernier lot : `{ data: { batch } }`.
+     * @param {import('express').Request} _req
+     * @param {import('express').Response} res
+     */
+    getReplayGainBatch(_req, res) {
+      res.json({ data: { batch: replayGain.getBatch() } });
+    },
+
+    /**
+     * POST /api/bulk/replaygain/stop — arrête le lot après le fichier en cours.
+     * @param {import('express').Request} _req
+     * @param {import('express').Response} res
+     */
+    stopReplayGainBatch(_req, res) {
+      res.json({ data: { batch: replayGain.stopBatch() } });
     },
 
     /**

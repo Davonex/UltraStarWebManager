@@ -122,7 +122,7 @@ describe('PATCH /api/songs/:id/headers — sur ce PC (admin)', () => {
     ]) {
       assert.equal((await app.patch(body)).status, 400, JSON.stringify(body));
     }
-    const res = await app.patch({ values: { BPM: '120' }, expectedModifiedAt: 1 });
+    const res = await app.patch({ values: { MP3: 'x.mp3' }, expectedModifiedAt: 1 });
     assert.equal(res.json.error.code, 'HEADER_NOT_EDITABLE');
   });
 

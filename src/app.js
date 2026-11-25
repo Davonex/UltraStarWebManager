@@ -62,18 +62,21 @@ export function createApp(config, deps) {
     playlists,
   });
   const ffmpeg = deps.ffmpeg ?? createFfmpeg({ ffmpegPath: config.ffmpegPath });
+  const settings = deps.settings ?? createSettings({ file: config.settingsFile });
+  // Sauvegardes facultatives : lues à chaque opération (préférences modifiables à chaud).
   const videos = createVideoConverter({
     catalog: deps.catalog,
     editor,
     ffmpeg,
     backupDir: config.backupDir,
+    backupOriginal: () => settings.get().backups.videoConversion,
   });
   const replayGain = createReplayGainTool({
     catalog: deps.catalog,
     ffmpeg,
     backupDir: config.backupDir,
+    backupOriginal: () => settings.get().backups.replayGain,
   });
-  const settings = deps.settings ?? createSettings({ file: config.settingsFile });
   const renamer = createRenamer({
     catalog: deps.catalog,
     songDir: config.songDir,

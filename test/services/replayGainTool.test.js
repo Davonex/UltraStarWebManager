@@ -58,7 +58,7 @@ describe('createReplayGainTool', () => {
       const tagSize = id3TagSize(data);
       assert.ok(tagSize > 0);
       assert.deepEqual(data.subarray(tagSize), AUDIO, 'données audio recopiées octet pour octet');
-      assert.deepEqual(await readFile(path.join(app.backupDir, backup)), AUDIO);
+      assert.deepEqual(await readFile(path.join(app.backupDir, String(backup))), AUDIO);
       assert.equal(song.replayGain?.trackGain, -2.54);
       assert.ok(!song.warnings.some((w) => w.code === 'REPLAYGAIN_MISSING'));
     } finally {
@@ -95,6 +95,43 @@ describe('createReplayGainTool', () => {
       await assert.rejects(broken.tool.measure(broken.song.id), { code: 'REPLAYGAIN_FAILED' });
     } finally {
       await broken.library.cleanup();
+    }
+  });
+});
+
+describe('createReplayGainTool — sauvegarde désactivée (préférences)', () => {
+  it('le tag est écrit sans copie du MP3 dans les sauvegardes', async () => {
+    const library = await createSongLibrary({
+      'lib/s/a.txt': songTxt({ TITLE: 'T', ARTIST: 'A', MP3: 'a.mp3', BPM: '300' }),
+      'lib/s/a.mp3': AUDIO,
+    });
+    try {
+      const catalog = createCatalog({
+        songDir: path.join(library.root, 'lib'),
+        logger: silentLogger,
+      });
+      await catalog.load();
+      const backupDir = path.join(library.root, 'backups');
+      const tool = createReplayGainTool({
+        catalog,
+        ffmpeg: createFakeFfmpeg(),
+        backupDir,
+        backupOriginal: () => false,
+        logger: silentLogger,
+      });
+      const [song] = catalog.getSongs();
+      const measured = await tool.measure(song.id);
+      const result = await tool.write(song.id, {
+        ...measured,
+        expectedAudioModifiedAt: measured.audioModifiedAt,
+      });
+      assert.equal(result.backup, null);
+      assert.equal(result.song.replayGain?.trackGain, -2.54);
+      await assert.rejects(readdir(backupDir), { code: 'ENOENT' });
+      const { items, backup } = await tool.listCandidates();
+      assert.deepEqual([items.length, backup], [0, false]);
+    } finally {
+      await library.cleanup();
     }
   });
 });

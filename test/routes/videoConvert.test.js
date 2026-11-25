@@ -93,7 +93,12 @@ describe('POST/GET /api/songs/:id/convert-video', () => {
       const expectedModifiedAt = app.song.modifiedAt;
       const dry = await app.post({ expectedModifiedAt, dryRun: true });
       assert.equal(dry.status, 200);
-      assert.deepEqual(dry.json.data.plan, { from: 'clip.avi', to: 'clip.mp4', replaces: false });
+      assert.deepEqual(dry.json.data.plan, {
+        from: 'clip.avi',
+        to: 'clip.mp4',
+        replaces: false,
+        keepOriginal: true,
+      });
       assert.equal((await app.getJob()).json.data.job, null);
 
       const started = await app.post({ expectedModifiedAt });
