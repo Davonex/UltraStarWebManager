@@ -104,7 +104,9 @@
     "RENAME_NOT_FOUND": "Renommage introuvable.",
     "RENAME_ALREADY_UNDONE": "Ce renommage a déjà été annulé.",
     "VALUE_REQUIRED": "Ce champ ne peut pas être vide.",
-    "PLAYLIST_WRITE_FAILED": "La playlist n’a pas pu être mise à jour."
+    "PLAYLIST_WRITE_FAILED": "La playlist n’a pas pu être mise à jour.",
+    "INVALID_NUMBER": "Nombre invalide pour {header}.",
+    "MEDLEY_ORDER": "La fin du medley doit être après son début."
   },
   "warnings": {
     "MISSING_HEADER": "En-tête #{header} manquant ou invalide",
@@ -148,7 +150,9 @@
     "hideVideo": "Masquer la vidéo"
   },
   "common": {
-    "close": "Fermer"
+    "close": "Fermer",
+    "yes": "oui",
+    "no": "non"
   },
   "auth": {
     "title": "Connexion",
@@ -305,7 +309,8 @@
       "stopping": "Arrêt après la vidéo en cours…",
       "summary": "Lot terminé : {converted} convertie(s), {errors} erreur(s).",
       "stopped": "Lot arrêté : {converted} convertie(s), {errors} erreur(s), {skipped} non traitée(s).",
-      "isAudio": "sert aussi de musique (#MP3) : créez d’abord le MP3 depuis la fenêtre info"
+      "isAudio": "sert aussi de musique (#MP3) : créez d’abord le MP3 depuis la fenêtre info",
+      "noBackup": "Sauvegarde des originaux désactivée dans les préférences : les vidéos d’origine seront supprimées après conversion."
     },
     "audio": {
       "tab": "Musique dans la vidéo",
@@ -327,6 +332,32 @@
       "stopping": "Arrêt après la chanson en cours…",
       "summary": "Lot terminé : {created} MP3 créé(s), {errors} erreur(s).",
       "stopped": "Lot arrêté : {created} MP3 créé(s), {errors} erreur(s), {skipped} non traitée(s)."
+    },
+    "replayGain": {
+      "tab": "ReplayGain",
+      "title": "Ajouter le ReplayGain aux MP3",
+      "hint": "Mesure le volume de chaque MP3 qui n’a pas de ReplayGain et l’écrit dans son tag ID3 (même traitement que le bouton de la fenêtre info). Les données audio ne changent pas. Traitement en tâche de fond, quelques secondes par fichier : vous pouvez fermer cette fenêtre.",
+      "none": "Tous les MP3 ont déjà leur ReplayGain.",
+      "found": {
+        "one": "{count} MP3 sans ReplayGain.",
+        "other": "{count} MP3 sans ReplayGain."
+      },
+      "shared": {
+        "one": "MP3 partagé avec {count} autre .txt (duo…)",
+        "other": "MP3 partagé avec {count} autres .txt"
+      },
+      "space": "Chaque MP3 est copié dans les sauvegardes avant l’écriture : prévoir environ {size} d’espace disque pour le prochain lot.",
+      "max": "200 (maximum)",
+      "apply": {
+        "one": "Calculer {count} fichier",
+        "other": "Calculer les {count} prochains fichiers"
+      },
+      "current": "Fichier {index}/{total} : {song}",
+      "stop": "Arrêter après le fichier en cours",
+      "stopping": "Arrêt après le fichier en cours…",
+      "summary": "Lot terminé : {written} ReplayGain écrit(s), {errors} erreur(s), {skipped} déjà fait(s).",
+      "stopped": "Lot arrêté : {written} ReplayGain écrit(s), {errors} erreur(s), {skipped} non traité(s) ou déjà fait(s).",
+      "noBackup": "Sauvegarde des MP3 désactivée dans les préférences : seul le tag ID3 est réécrit, sans copie."
     }
   },
   "video": {
@@ -341,7 +372,10 @@
     "runningUnknown": "Conversion…",
     "done": "Vidéo convertie : {file}. Original sauvegardé : {backup}",
     "unavailable": "ffmpeg introuvable : renseignez FFMPEG_PATH dans .env pour activer la conversion.",
-    "isAudio": "Le fichier vidéo sert aussi de musique : créez d’abord le fichier MP3 (avertissement ci-dessus), la vidéo pourra ensuite être convertie."
+    "isAudio": "Le fichier vidéo sert aussi de musique : créez d’abord le fichier MP3 (avertissement ci-dessus), la vidéo pourra ensuite être convertie.",
+    "planNewNoBackup": "{from} sera converti en {to} ; #VIDEO sera mis à jour et l’original supprimé (sauvegarde désactivée dans les préférences).",
+    "planReplaceNoBackup": "{from} sera remplacé par sa version H.264 ; l’original ne sera pas sauvegardé (désactivé dans les préférences).",
+    "doneNoBackup": "Vidéo convertie : {file}. Original non sauvegardé (préférences)."
   },
   "musicbrainz": {
     "title": "MusicBrainz",
@@ -390,7 +424,8 @@
     "hint": "ffmpeg mesure le morceau (référence 89 dB, comme MP3Gain) ; vous confirmez avant toute écriture. Seul le tag ID3 change, pas le son.",
     "measured": "Mesure : gain de piste {gain}, crête {peak}.",
     "write": "Écrire dans le MP3",
-    "written": "ReplayGain écrit dans le MP3 (tag ID3). Sauvegarde : {backup}"
+    "written": "ReplayGain écrit dans le MP3 (tag ID3). Sauvegarde : {backup}",
+    "writtenNoBackup": "ReplayGain écrit dans le MP3 (tag ID3). Pas de sauvegarde du MP3 (préférences)."
   },
   "warningTypes": {
     "MISSING_HEADER": "En-tête #{header} manquant ou invalide",
@@ -420,7 +455,7 @@
     "notChecked": "non vérifié",
     "defaults": "Valeurs par défaut",
     "save": "Enregistrer",
-    "saved": "Préférences enregistrées : la bibliothèque a été relue avec les nouveaux modèles.",
+    "saved": "Préférences enregistrées : la bibliothèque a été relue (nommage) et les sauvegardes sont à jour.",
     "invalid": "Un modèle n’est pas valide : voir le champ en rouge.",
     "kinds": {
       "folder": "Dossier",
@@ -439,7 +474,24 @@
       "PATTERN_NO_PLACEHOLDER": "Utilisez {artist} et/ou {title}.",
       "PATTERN_UNKNOWN_PLACEHOLDER": "Seuls {artist} et {title} sont possibles.",
       "PATTERN_FORBIDDEN_CHARACTER": "Les caractères \\ / : * ? \" < > | sont interdits dans un nom de fichier."
-    }
+    },
+    "backupsTitle": "Sauvegardes",
+    "backupsIntro": "Copie de l’original dans le dossier de sauvegarde (BACKUP_DIR) avant chaque écriture. Les fichiers chanson et les playlists sont toujours sauvegardés ; les fichiers lourds peuvent ne pas l’être.",
+    "action": "Action",
+    "backup": "Sauvegarde",
+    "always": "toujours",
+    "backupKinds": {
+      "txt": "Fichiers chanson .txt (en-têtes, encodage, renommage, MP3 créé…)",
+      "playlists": "Playlists .upl",
+      "videoConversion": "Conversion vidéo en MP4 H.264 (vidéo d’origine)",
+      "replayGain": "ReplayGain des MP3 (MP3 avant écriture du tag)"
+    },
+    "backupHints": {
+      "videoConversion": "Désactivé : la vidéo d’origine est supprimée après conversion.",
+      "replayGain": "Désactivé : seul le tag ID3 change, les données audio sont recopiées à l’identique."
+    },
+    "namingMenu": "Norme de nommage",
+    "backupsMenu": "Les sauvegardes"
   },
   "rename": {
     "open": "Renommer selon la norme",
@@ -509,5 +561,37 @@
       "EXISTS": "Un dossier porte déjà ce nom."
     },
     "short": "Renommer"
+  },
+  "timing": {
+    "BPM": "BPM",
+    "GAP": "GAP (ms)",
+    "VIDEOGAP": "VIDEOGAP (s)",
+    "PREVIEWSTART": "Début de l’extrait (s)",
+    "MEDLEYSTARTBEAT": "Début du medley (beat)",
+    "MEDLEYENDBEAT": "Fin du medley (beat)",
+    "START": "START (s)",
+    "END": "END (ms)",
+    "medleyStartShort": "Medley : début",
+    "medleyEndShort": "Medley : fin"
+  },
+  "timingHint": {
+    "BPM": "ex. 300",
+    "GAP": "ms, ex. 12345",
+    "VIDEOGAP": "s, ex. 3,2 ou -0,5",
+    "PREVIEWSTART": "s, ex. 45,5",
+    "MEDLEYSTARTBEAT": "beat, ex. 395",
+    "MEDLEYENDBEAT": "beat, ex. 1105",
+    "START": "s, ex. 1,5",
+    "END": "ms, ex. 180000"
+  },
+  "timingHelp": {
+    "BPM": "Attention : changer le BPM décale toutes les notes. À réserver à une correction connue (ex. depuis Yass).",
+    "GAP": "Millisecondes avant le premier beat. Décale toutes les notes par rapport à la musique.",
+    "VIDEOGAP": "Secondes : vidéo − musique. Positif = la vidéo démarre plus loin ; négatif possible. Vide = 0.",
+    "PREVIEWSTART": "Secondes depuis le début de la musique. Vide = automatique (medley, sinon choix du lecteur).",
+    "MEDLEYSTARTBEAT": "Beat du début de l’extrait medley (entier). Vide = retirer.",
+    "MEDLEYENDBEAT": "Beat de fin du medley (entier), après le début. Vide = retirer.",
+    "START": "Secondes : la musique démarre à cet endroit. Vide = retirer.",
+    "END": "Millisecondes : la chanson s’arrête à cet endroit. Vide = retirer."
   }
 }

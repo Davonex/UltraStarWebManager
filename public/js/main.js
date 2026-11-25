@@ -15,6 +15,7 @@ import {
 } from './api.js';
 import { createAuthView } from './authView.js';
 import { createBulkAudioTool } from './bulkAudioTool.js';
+import { createBulkReplayGainTool } from './bulkReplayGainTool.js';
 import { createBulkTools } from './bulkTools.js';
 import { createBulkVideoTool } from './bulkVideoTool.js';
 import { createFiltersView } from './filtersView.js';
@@ -52,7 +53,7 @@ const videoPanel = createVideoPanel(byId('video-panel'));
 const videoSwitch = /** @type {HTMLInputElement} */ (byId('video-switch'));
 const rescanButton = /** @type {HTMLButtonElement} */ (byId('rescan-button'));
 const bulkButton = /** @type {HTMLButtonElement} */ (byId('bulk-button'));
-const preferencesButton = /** @type {HTMLButtonElement} */ (byId('preferences-button'));
+const preferencesMenu = byId('preferences-menu');
 const playlistChip = /** @type {HTMLElement} */ (document.querySelector('[data-facet="playlist"]'));
 /** Niveaux d'accès, du plus faible au plus fort (comme côté serveur). */
 const ROLE_ORDER = ['read', 'write', 'admin'];
@@ -361,11 +362,25 @@ videoSwitch.addEventListener('change', () => {
 const bulkTools = createBulkTools({ modal: byId('bulk-modal'), onDone: loadCatalog });
 const bulkVideoTool = createBulkVideoTool({ modal: byId('bulk-modal'), onDone: loadCatalog });
 const bulkAudioTool = createBulkAudioTool({ modal: byId('bulk-modal'), onDone: loadCatalog });
+const bulkReplayGainTool = createBulkReplayGainTool({
+  modal: byId('bulk-modal'),
+  onDone: loadCatalog,
+});
 /** Préférences (admin) : après enregistrement, la liste est rechargée (avertissements à jour). */
 const preferencesView = createPreferencesView({
   modal: byId('preferences-modal'),
   onSaved: loadCatalog,
 });
+// Menu ⚙ : « Norme de nommage » ou « Les sauvegardes » ouvre la fenêtre sur sa partie.
+for (const item of preferencesMenu.querySelectorAll('[data-preferences-section]')) {
+  item.addEventListener('click', () =>
+    preferencesView.open(
+      /** @type {'naming' | 'backups'} */ (
+        /** @type {HTMLElement} */ (item).dataset.preferencesSection
+      ),
+    ),
+  );
+}
 
 /** Bouton « Actualiser » : relit les fichiers .txt puis recharge la liste. */
 rescanButton.addEventListener('click', async () => {
@@ -414,6 +429,7 @@ async function init() {
     bulkTools.refresh();
     bulkVideoTool.refresh();
     bulkAudioTool.refresh();
+    bulkReplayGainTool.refresh();
     playlistMenu.refresh();
     preferencesView.refresh();
     renderStatus();
@@ -437,7 +453,7 @@ async function init() {
   const canWrite = ROLE_ORDER.indexOf(me.role ?? '') >= ROLE_ORDER.indexOf('write');
   rescanButton.hidden = !canWrite;
   bulkButton.hidden = !canWrite;
-  preferencesButton.hidden = ROLE_ORDER.indexOf(me.role ?? '') < ROLE_ORDER.indexOf('admin');
+  preferencesMenu.hidden = ROLE_ORDER.indexOf(me.role ?? '') < ROLE_ORDER.indexOf('admin');
   if (!me.role) {
     await checkServer();
     authView.showLogin(loginError);

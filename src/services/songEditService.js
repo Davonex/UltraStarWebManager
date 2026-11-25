@@ -1,7 +1,8 @@
 // @ts-check
 /**
  * Modification des en-têtes d'une chanson (ARTIST, TITLE, EDITION, TAGS, CREATOR, YEAR, GENRE,
- * LANGUAGE, P1, P2).
+ * LANGUAGE, P1, P2) et de la synchronisation (BPM, GAP, VIDEOGAP, PREVIEWSTART, medley,
+ * START, END).
  *
  * Artiste et titre : la modification s'applique aussi aux autres .txt du dossier qui
  * désignent la même chanson (solo, duo… ; la marque de duo du titre est gardée) et aux
@@ -37,11 +38,35 @@ export const EDITABLE_HEADERS = Object.freeze([
   'LANGUAGE',
   'P1',
   'P2',
+  'BPM',
+  'GAP',
+  'VIDEOGAP',
+  'PREVIEWSTART',
+  'MEDLEYSTARTBEAT',
+  'MEDLEYENDBEAT',
+  'START',
+  'END',
 ]);
+
+/**
+ * Synchronisation : valeurs numériques. `decimal` : virgule ou point accepté (le séparateur
+ * du fichier est conservé à l'écriture) ; `negative` : valeur négative permise ;
+ * `positive` : strictement plus grand que 0.
+ */
+const TIMING_HEADERS = Object.freeze({
+  BPM: { decimal: true, negative: false, positive: true }, // BPM UltraStar
+  GAP: { decimal: true, negative: false, positive: false }, // millisecondes
+  VIDEOGAP: { decimal: true, negative: true, positive: false }, // secondes
+  PREVIEWSTART: { decimal: true, negative: false, positive: false }, // secondes
+  MEDLEYSTARTBEAT: { decimal: false, negative: false, positive: false }, // beat
+  MEDLEYENDBEAT: { decimal: false, negative: false, positive: false }, // beat
+  START: { decimal: true, negative: false, positive: false }, // secondes
+  END: { decimal: false, negative: false, positive: false }, // millisecondes
+});
 /** En-têtes à une seule valeur (pas de liste séparée par des virgules). */
 const SINGLE_VALUE_HEADERS = new Set(['ARTIST', 'TITLE', 'P1', 'P2']);
 /** En-têtes obligatoires : jamais supprimés. */
-const REQUIRED_HEADERS = new Set(['ARTIST', 'TITLE']);
+const REQUIRED_HEADERS = new Set(['ARTIST', 'TITLE', 'BPM']);
 /** Ancien nom des chanteurs d'un duo (avant le format 1.0.0), mis à jour s'il est utilisé. */
 const LEGACY_SINGER_HEADERS = Object.freeze({ P1: 'DUETSINGERP1', P2: 'DUETSINGERP2' });
 /** Longueur maximale d'une valeur d'en-tête. */
@@ -92,6 +117,18 @@ export function normalizeHeaderValue(header, value) {
   if (value.length > MAX_VALUE_LENGTH || CONTROL_CHARACTERS.test(value)) {
     throw new SongEditError('INVALID_VALUE', `Invalid value for ${header}`, 400, { header });
   }
+  if (header in TIMING_HEADERS) {
+    // Nombre (vide = supprimer l'en-tête) ; séparateur décimal ramené au point ici.
+    const rule = TIMING_HEADERS[/** @type {keyof typeof TIMING_HEADERS} */ (header)];
+    const number = value.trim().replace(/\s+/g, '');
+    if (number === '') return null;
+    const pattern = rule.decimal ? /^-?\d+([.,]\d+)?$/ : /^-?\d+$/;
+    const parsed = Number(number.replace(',', '.'));
+    if (!pattern.test(number) || (!rule.negative && parsed < 0) || (rule.positive && parsed <= 0)) {
+      throw new SongEditError('INVALID_NUMBER', `Invalid number for ${header}`, 400, { header });
+    }
+    return number.replace(',', '.');
+  }
   if (SINGLE_VALUE_HEADERS.has(header)) {
     // Nom d'un chanteur : texte simple (il peut contenir des virgules).
     const clean = value.trim().replace(/\s+/g, ' ');
@@ -117,6 +154,56 @@ export function normalizeHeaderValue(header, value) {
     }
   }
   return items.length > 0 ? items.join(', ') : null;
+}
+
+/**
+ * Valeur brute d'un en-tête dans le texte du .txt (undefined s'il est absent).
+ * @param {string} text
+ * @param {string} header
+ */
+function headerValue(text, header) {
+  return new RegExp(`^#${header}:(.*)$`, 'im').exec(text)?.[1]?.trim();
+}
+
+/**
+ * Séparateur décimal du fichier conservé : virgule si l'en-tête modifié l'utilisait déjà,
+ * ou, s'il était absent, si un autre nombre du fichier (BPM…) l'utilise.
+ * @param {string} text
+ * @param {Record<string, string | null>} values  Modifiées sur place.
+ */
+function applyDecimalSeparator(text, values) {
+  const decimals = Object.entries(TIMING_HEADERS)
+    .filter(([, rule]) => rule.decimal)
+    .map(([header]) => header);
+  for (const [header, value] of Object.entries(values)) {
+    if (value === null || !decimals.includes(header) || !value.includes('.')) continue;
+    const original = headerValue(text, header);
+    const comma =
+      original !== undefined
+        ? original.includes(',')
+        : decimals.some((other) => headerValue(text, other)?.includes(','));
+    if (comma) values[header] = value.replace('.', ',');
+  }
+}
+
+/**
+ * Le medley doit finir après son début (valeurs modifiées, sinon celles du fichier).
+ * @param {string} text
+ * @param {Record<string, string | null>} values
+ * @throws {SongEditError}
+ */
+function checkMedley(text, values) {
+  if (!('MEDLEYSTARTBEAT' in values) && !('MEDLEYENDBEAT' in values)) return;
+  /** @param {string} header */
+  const beat = (header) => {
+    const value = header in values ? values[header] : headerValue(text, header);
+    return value === null || value === undefined || value === '' ? null : Number(value);
+  };
+  const start = beat('MEDLEYSTARTBEAT');
+  const end = beat('MEDLEYENDBEAT');
+  if (start !== null && end !== null && end <= start) {
+    throw new SongEditError('MEDLEY_ORDER', 'The medley must end after it starts', 400);
+  }
 }
 
 /**
@@ -391,6 +478,8 @@ export function createSongEditor({ catalog, backupDir, playlists = null, logger 
 
       const { song, file, buffer } = await loadForWrite(id, expectedModifiedAt);
       const { text } = decodeSongBuffer(buffer);
+      applyDecimalSeparator(text, clean);
+      checkMedley(text, clean);
       // Duo à l'ancien format : #DUETSINGERP1 est mis à jour plutôt que d'ajouter un #P1.
       for (const [header, legacy] of Object.entries(LEGACY_SINGER_HEADERS)) {
         if (!(header in clean)) continue;

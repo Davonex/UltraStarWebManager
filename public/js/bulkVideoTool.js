@@ -67,6 +67,7 @@ export function createBulkVideoTool({ modal, onDone }) {
    * @type {{
    *   phase: 'idle' | 'simulating' | 'ready' | 'starting' | 'running' | 'failed',
    *   available: boolean,
+   *   backup: boolean,        // originaux sauvegardés (préférences)
    *   candidates: VideoCandidate[],
    *   selected: Set<string>,
    *   batch: VideoBatch | null,      // lot suivi (en cours ou terminé)
@@ -76,6 +77,7 @@ export function createBulkVideoTool({ modal, onDone }) {
   const state = {
     phase: 'idle',
     available: true,
+    backup: true,
     candidates: [],
     selected: new Set(),
     batch: null,
@@ -238,7 +240,9 @@ export function createBulkVideoTool({ modal, onDone }) {
       .filter((item) => state.selected.has(item.id))
       .reduce((sum, item) => sum + (item.size ?? 0), 0);
     note.hidden = state.phase === 'running' || state.candidates.length === 0;
-    note.textContent = t('bulk.video.space', { size: megabytes(total) });
+    note.textContent = state.backup
+      ? t('bulk.video.space', { size: megabytes(total) })
+      : t('bulk.video.noBackup');
 
     list.hidden = state.phase === 'running' || state.candidates.length === 0;
     if (withRows) renderRows();
@@ -263,6 +267,7 @@ export function createBulkVideoTool({ modal, onDone }) {
     try {
       const { data } = await bulkConvertVideos({ dryRun: true });
       state.available = data.available ?? false;
+      state.backup = data.backup ?? true;
       state.candidates = data.items ?? [];
       state.selected = new Set(state.candidates.filter((i) => !i.isAudio).map((i) => i.id));
       state.phase = 'ready';

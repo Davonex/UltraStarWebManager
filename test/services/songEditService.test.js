@@ -165,7 +165,7 @@ describe('songEditService', () => {
     const zen = songOf('Zen');
     await assert.rejects(
       editor.editHeaders(zen.id, {
-        values: { BPM: '120' },
+        values: { MP3: 'x.mp3' },
         expectedModifiedAt: zen.modifiedAt,
       }),
       (error) => error instanceof SongEditError && error.code === 'HEADER_NOT_EDITABLE',
@@ -505,6 +505,70 @@ describe('songEditService — artiste et titre', () => {
       );
     } finally {
       await app.dir.cleanup();
+    }
+  });
+});
+
+describe('songEditService — synchronisation (BPM, GAP, VIDEOGAP, preview, medley)', () => {
+  it('nombres : point ou virgule, négatif seulement pour VIDEOGAP, BPM obligatoire', () => {
+    assert.equal(normalizeHeaderValue('GAP', ' 12 345 '), '12345');
+    assert.equal(normalizeHeaderValue('VIDEOGAP', '-1,5'), '-1.5');
+    assert.equal(normalizeHeaderValue('PREVIEWSTART', ''), null);
+    assert.equal(normalizeHeaderValue('MEDLEYSTARTBEAT', '395'), '395');
+    for (const [header, value] of [
+      ['GAP', '-10'],
+      ['BPM', '0'],
+      ['MEDLEYSTARTBEAT', '1.5'],
+      ['VIDEOGAP', 'abc'],
+      ['END', '1e5'],
+    ]) {
+      assert.throws(
+        () => normalizeHeaderValue(header, value),
+        (error) => error instanceof SongEditError && error.code === 'INVALID_NUMBER',
+        `${header}=${value}`,
+      );
+    }
+    assert.throws(
+      () => normalizeHeaderValue('BPM', ''),
+      (error) => error instanceof SongEditError && error.code === 'VALUE_REQUIRED',
+    );
+  });
+
+  it('écrit en gardant la virgule du fichier ; medley : fin après le début', async () => {
+    const text =
+      '#TITLE:T\r\n#ARTIST:A\r\n#MP3:a.mp3\r\n#BPM:330,00\r\n#GAP:9000\r\n#MEDLEYSTARTBEAT:395\r\n' +
+      '#MEDLEYENDBEAT:1105\r\n: 0 4 0 la\r\nE\r\n';
+    const dir = await createSongLibrary({ 'lib/s/a.txt': text, 'lib/s/a.mp3': '' });
+    try {
+      const catalog = createCatalog({ songDir: path.join(dir.root, 'lib'), logger: silentLogger });
+      await catalog.load();
+      const editor = createSongEditor({
+        catalog,
+        backupDir: path.join(dir.root, 'backups'),
+        logger: silentLogger,
+      });
+      let [song] = catalog.getSongs();
+      const result = await editor.editHeaders(song.id, {
+        values: { VIDEOGAP: '-0.4', GAP: '9100', PREVIEWSTART: '26.955' },
+        expectedModifiedAt: song.modifiedAt,
+      });
+      assert.equal(result.song.videoGap, -0.4);
+      assert.equal(
+        await readFile(path.join(dir.root, 'lib/s/a.txt'), 'utf8'),
+        '#TITLE:T\r\n#ARTIST:A\r\n#MP3:a.mp3\r\n#BPM:330,00\r\n#GAP:9100\r\n#MEDLEYSTARTBEAT:395\r\n' +
+          '#MEDLEYENDBEAT:1105\r\n#VIDEOGAP:-0,4\r\n#PREVIEWSTART:26,955\r\n: 0 4 0 la\r\nE\r\n',
+      );
+      assert.ok(result.backup);
+      [song] = catalog.getSongs();
+      await assert.rejects(
+        editor.editHeaders(song.id, {
+          values: { MEDLEYENDBEAT: '300' },
+          expectedModifiedAt: song.modifiedAt,
+        }),
+        (error) => error instanceof SongEditError && error.code === 'MEDLEY_ORDER',
+      );
+    } finally {
+      await dir.cleanup();
     }
   });
 });

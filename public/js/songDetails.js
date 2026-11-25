@@ -64,7 +64,8 @@ const SHOWN_HEADERS = new Set([
 ]);
 
 /** @typedef {import('./api.js').Song} Song */
-/** @typedef {'ARTIST' | 'TITLE' | 'EDITION' | 'TAGS' | 'CREATOR' | 'LANGUAGE' | 'GENRE' | 'YEAR' | 'P1' | 'P2'} EditableHeader */
+/** @typedef {'ARTIST' | 'TITLE' | 'EDITION' | 'TAGS' | 'CREATOR' | 'LANGUAGE' | 'GENRE' | 'YEAR' | 'P1' | 'P2'
+ *   | 'BPM' | 'GAP' | 'VIDEOGAP' | 'PREVIEWSTART' | 'MEDLEYSTARTBEAT' | 'MEDLEYENDBEAT' | 'START' | 'END'} EditableHeader */
 
 /** Avertissements corrigeables par une conversion en UTF-8. */
 const ENCODING_WARNINGS = new Set(['ENCODING_NOT_UTF8', 'ENCODING_UTF8_BOM']);
@@ -103,9 +104,28 @@ const EDIT_LABELS = Object.freeze({
   YEAR: 'details.year',
   P1: 'details.singer1',
   P2: 'details.singer2',
+  BPM: 'timing.BPM',
+  GAP: 'timing.GAP',
+  VIDEOGAP: 'timing.VIDEOGAP',
+  PREVIEWSTART: 'timing.PREVIEWSTART',
+  MEDLEYSTARTBEAT: 'timing.MEDLEYSTARTBEAT',
+  MEDLEYENDBEAT: 'timing.MEDLEYENDBEAT',
+  START: 'timing.START',
+  END: 'timing.END',
 });
+/** Synchronisation : saisie d'un nombre, valeur brute de l'en-tête (unité dans le libellé). */
+const TIMING_FIELDS = new Set([
+  'BPM',
+  'GAP',
+  'VIDEOGAP',
+  'PREVIEWSTART',
+  'MEDLEYSTARTBEAT',
+  'MEDLEYENDBEAT',
+  'START',
+  'END',
+]);
 /** Champs à une seule valeur : saisie simple au lieu des pastilles. */
-const SINGLE_VALUE_FIELDS = new Set(['ARTIST', 'TITLE', 'YEAR', 'P1', 'P2']);
+const SINGLE_VALUE_FIELDS = new Set(['ARTIST', 'TITLE', 'YEAR', 'P1', 'P2', ...TIMING_FIELDS]);
 /** Artiste et titre : aussi appliqués aux autres .txt du dossier et aux playlists. */
 const IDENTITY_FIELDS = new Set(['ARTIST', 'TITLE']);
 
@@ -225,7 +245,7 @@ export function createSongDetailsView(
   let shownMessage = /** @type {typeof message} */ (null);
   let busy = false;
   /** Conversion vidéo proposée (confirmation affichée), ou null. */
-  /** @type {{ from: string, to: string, replaces: boolean } | null} */
+  /** @type {{ from: string, to: string, replaces: boolean, keepOriginal: boolean } | null} */
   let videoPlan = null;
   /** Dernière conversion vidéo suivie (toutes chansons : une seule à la fois). */
   /** @type {import('./api.js').VideoJob | null} */
@@ -701,7 +721,12 @@ export function createSongDetailsView(
       });
       current = data.song;
       onSongUpdated(data.song);
-      message = { kind: 'success', text: t('replayGain.written', { backup: data.backup }) };
+      message = {
+        kind: 'success',
+        text: data.backup
+          ? t('replayGain.written', { backup: data.backup })
+          : t('replayGain.writtenNoBackup'),
+      };
       gainMeasure = null;
       details = (await getSongDetails(data.song.id)).data.details;
     } catch (error) {
@@ -856,10 +881,14 @@ export function createSongDetailsView(
         el(
           'small',
           'd-block mb-1',
-          t(plan.replaces ? 'video.planReplace' : 'video.planNew', {
-            from: plan.from,
-            to: plan.to,
-          }),
+          // Original sauvegardé ou supprimé, selon les préférences
+          t(
+            `video.${plan.replaces ? 'planReplace' : 'planNew'}${plan.keepOriginal ? '' : 'NoBackup'}`,
+            {
+              from: plan.from,
+              to: plan.to,
+            },
+          ),
         ),
         el('small', 'd-block text-body-secondary mb-1', t('video.duration')),
       );
@@ -984,7 +1013,12 @@ export function createSongDetailsView(
     if (!shown) return;
     message =
       job.state === 'done'
-        ? { kind: 'success', text: t('video.done', { file: job.to, backup: job.backup ?? '—' }) }
+        ? {
+            kind: 'success',
+            text: job.backup
+              ? t('video.done', { file: job.to, backup: job.backup })
+              : t('video.doneNoBackup', { file: job.to }),
+          }
         : {
             kind: 'danger',
             text: errorText(
@@ -1015,6 +1049,7 @@ export function createSongDetailsView(
   function valuesOf(song, header) {
     /** @param {string | null | undefined} value */
     const one = (value) => (value ? [value] : []);
+    if (TIMING_FIELDS.has(header)) return one(details?.headers[header]);
     switch (header) {
       case 'ARTIST':
         return one(song.artist);
@@ -1127,6 +1162,11 @@ export function createSongDetailsView(
     if (IDENTITY_FIELDS.has(header)) {
       // Prévenir : autres .txt du dossier, playlists et scores UltraStar
       field.append(el('small', 'details-inline-hint text-body-secondary', t('edit.identityHint')));
+    } else if (TIMING_FIELDS.has(header)) {
+      // Unité, valeur vide, effet sur la chanson
+      field.append(
+        el('small', 'details-inline-hint text-body-secondary', t(`timingHelp.${header}`)),
+      );
     }
     wrap.append(field, actions);
     queueMicrotask(() => input.focus());
@@ -1148,6 +1188,11 @@ export function createSongDetailsView(
       input.maxLength = 4;
       input.pattern = '\\d{4}';
       input.placeholder = t('edit.yearPlaceholder');
+    }
+    if (TIMING_FIELDS.has(header)) {
+      input.inputMode = 'decimal';
+      input.maxLength = 20;
+      input.placeholder = t(`timingHint.${header}`);
     }
     const getValues = () => (input.value.trim() ? [input.value.trim()] : []);
     input.addEventListener('keydown', (event) => {
@@ -1329,27 +1374,50 @@ export function createSongDetailsView(
     sections.push(section('info-lg', t('details.information'), infoRows, musicBrainzButton()));
 
     /** @type {[string, string, Node | string][]} */
+    /** Beat du medley : « 0:42 (beat 395) ». @param {number | null} seconds @param {string} header */
+    const medleyBeat = (seconds, header) =>
+      headers[header]
+        ? `${seconds === null ? '' : `${formatTime(seconds)} `}(beat ${headers[header]})`
+        : '—';
     const timingRows = [
-      ['speedometer2', 'BPM', number(timing.bpm)],
-      ['hourglass-split', 'GAP', timing.gap === null ? '—' : `${number(timing.gap, 0)} ms`],
-      ['film', 'VIDEOGAP', timing.videoGap === null ? '—' : `${number(timing.videoGap)} s`],
+      ['speedometer2', 'BPM', editableValue('BPM', number(timing.bpm))],
+      [
+        'hourglass-split',
+        'GAP',
+        editableValue('GAP', timing.gap === null ? '—' : `${number(timing.gap, 0)} ms`),
+      ],
+      [
+        'film',
+        'VIDEOGAP',
+        editableValue('VIDEOGAP', timing.videoGap === null ? '—' : `${number(timing.videoGap)} s`),
+      ],
       [
         'play-circle',
         t('details.preview'),
-        timing.previewStart === null
-          ? t('details.previewAuto')
-          : `${time(timing.previewStart)} — ${previewSources[timing.previewSource ?? ''] ?? ''}`,
+        editableValue(
+          'PREVIEWSTART',
+          timing.previewStart === null
+            ? t('details.previewAuto')
+            : `${time(timing.previewStart)} — ${previewSources[timing.previewSource ?? ''] ?? ''}`,
+        ),
       ],
       [
         'skip-forward',
-        t('details.medley'),
-        timing.medleyStart === null || timing.medleyEnd === null
-          ? '—'
-          : `${formatTime(timing.medleyStart)} → ${formatTime(timing.medleyEnd)}`,
+        t('timing.medleyStartShort'),
+        editableValue('MEDLEYSTARTBEAT', medleyBeat(timing.medleyStart, 'MEDLEYSTARTBEAT')),
+      ],
+      [
+        'skip-end',
+        t('timing.medleyEndShort'),
+        editableValue('MEDLEYENDBEAT', medleyBeat(timing.medleyEnd, 'MEDLEYENDBEAT')),
       ],
     ];
-    if (timing.start !== null) timingRows.push(['stopwatch', 'START', time(timing.start)]);
-    if (timing.end !== null) timingRows.push(['stopwatch', 'END', time(timing.end / 1000)]);
+    if (timing.start !== null) {
+      timingRows.push(['stopwatch', 'START', editableValue('START', time(timing.start))]);
+    }
+    if (timing.end !== null) {
+      timingRows.push(['stopwatch', 'END', editableValue('END', time(timing.end / 1000))]);
+    }
     sections.push(section('stopwatch', t('details.timing'), timingRows));
 
     const videoNote =

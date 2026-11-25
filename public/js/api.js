@@ -319,7 +319,7 @@ export const bulkConvertToUtf8 = (body) => postJson('/bulk/convert-utf8', body);
  * sinon la conversion est lancée en tâche de fond (suivre avec getVideoJob).
  * @param {string} id
  * @param {{ expectedModifiedAt: number, dryRun?: boolean }} body
- * @returns {Promise<{ data: { plan: { from: string, to: string, replaces: boolean }, job: VideoJob | null } }>}
+ * @returns {Promise<{ data: { plan: { from: string, to: string, replaces: boolean, keepOriginal: boolean }, job: VideoJob | null } }>}
  */
 export const convertSongVideo = (id, body) =>
   postJson(`/songs/${encodeURIComponent(id)}/convert-video`, body);
@@ -381,7 +381,7 @@ export const getVideoJob = (id) => getJson(`/songs/${encodeURIComponent(id)}/con
  * Conversion vidéo en masse (niveau écriture) : simulation avec `{ dryRun: true }`,
  * sinon lancement d'un lot (au plus 200) traité en tâche de fond.
  * @param {{ dryRun: true } | { items: { id: string, expectedModifiedAt: number }[] }} body
- * @returns {Promise<{ data: { available?: boolean, items?: VideoCandidate[], batch?: VideoBatch } }>}
+ * @returns {Promise<{ data: { available?: boolean, backup?: boolean, items?: VideoCandidate[], batch?: VideoBatch } }>}
  */
 export const bulkConvertVideos = (body) => postJson('/bulk/convert-video', body);
 
@@ -415,6 +415,40 @@ export const getAudioBatch = () => getJson('/bulk/extract-audio');
 
 /** @returns {Promise<{ data: { batch: VideoBatch | null } }>} Arrêt après la chanson en cours. */
 export const stopAudioBatch = () => postJson('/bulk/extract-audio/stop', {});
+
+/**
+ * @typedef {object} ReplayGainCandidate  MP3 sans ReplayGain (un par fichier).
+ * @property {string} id
+ * @property {string | null} artist
+ * @property {string | null} title
+ * @property {string} file
+ * @property {number | null} size  Octets.
+ * @property {number} audioModifiedAt
+ * @property {number} sharedBy  Autres .txt qui utilisent ce MP3 (duo…).
+ */
+
+/**
+ * @typedef {object} ReplayGainBatch
+ * @property {'running' | 'done' | 'stopped'} state
+ * @property {boolean} stopRequested
+ * @property {{ id: string, artist: string | null, title: string | null,
+ *   status: 'pending' | 'running' | 'converted' | 'error' | 'skipped',
+ *   trackGain: number | null, code: string | null }[]} items
+ */
+
+/**
+ * ReplayGain en masse (niveau écriture) : simulation avec `{ dryRun: true }`, sinon
+ * lancement d'un lot (au plus 200) traité en tâche de fond.
+ * @param {{ dryRun: true } | { items: { id: string, expectedAudioModifiedAt: number }[] }} body
+ * @returns {Promise<{ data: { available?: boolean, backup?: boolean, items?: ReplayGainCandidate[], batch?: ReplayGainBatch } }>}
+ */
+export const bulkReplayGain = (body) => postJson('/bulk/replaygain', body);
+
+/** @returns {Promise<{ data: { batch: ReplayGainBatch | null } }>} Lot en cours ou dernier lot. */
+export const getReplayGainBatch = () => getJson('/bulk/replaygain');
+
+/** @returns {Promise<{ data: { batch: ReplayGainBatch | null } }>} Arrêt après le fichier en cours. */
+export const stopReplayGainBatch = () => postJson('/bulk/replaygain/stop', {});
 
 /**
  * @typedef {object} MbCandidate  Enregistrement trouvé sur MusicBrainz.
@@ -462,7 +496,10 @@ export function getMusicBrainzSuggestion(id, candidate) {
 
 /**
  * @typedef {'folder' | 'txt' | 'duet' | 'audio' | 'video' | 'cover' | 'background' | 'vocals' | 'instrumental'} NamingKind
- * @typedef {{ naming: Record<NamingKind, { enabled: boolean, pattern: string }> }} Settings
+ * @typedef {'videoConversion' | 'replayGain'} BackupKind
+ * @typedef {{ naming: Record<NamingKind, { enabled: boolean, pattern: string }>,
+ *   backups: Record<BackupKind, boolean> }} Settings
+ *   `backups` : sauvegarde de l'original avant une conversion vidéo / l'écriture du ReplayGain.
  */
 
 /** @returns {Promise<{ data: Settings, meta: { defaults: Settings } }>} Préférences. */
